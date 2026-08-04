@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Hoá Đơn Vàng — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">Hoá Đơn Bán Sỉ Vàng</h2></div>
+          <div class="col-auto">
+            <a href="/gold-invoice.html" class="btn btn-primary">+ Lập hoá đơn mới</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+
+        <!-- Bộ lọc -->
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col">
+                <input id="search" type="text" class="form-control" placeholder="Tìm theo số HĐ, tên khách, SĐT..."/>
+              </div>
+              <div class="col-auto">
+                <select id="filter-status" class="form-select">
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="completed">Hoàn thành</option>
+                  <option value="cancelled">Đã huỷ</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <input id="filter-from" type="date" class="form-control" placeholder="Từ ngày"/>
+              </div>
+              <div class="col-auto">
+                <input id="filter-to" type="date" class="form-control" placeholder="Đến ngày"/>
+              </div>
+              <div class="col-auto">
+                <button class="btn" onclick="loadInvoices()">Lọc</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bảng hoá đơn -->
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Số HĐ</th>
+                  <th>Ngày</th>
+                  <th>Khách hàng</th>
+                  <th>SĐT</th>
+                  <th class="text-end">Vàng giao</th>
+                  <th class="text-end">Nợ vàng</th>
+                  <th class="text-end">Tổng tiền</th>
+                  <th class="text-end">Nợ tiền</th>
+                  <th>TT</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="invoice-rows">
+                <tr><td colspan="10" class="text-center text-muted py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND  = n => new Intl.NumberFormat("vi-VN").format(Math.round(n)) + " đ";
+  const fmtGold = n => Number(n).toFixed(3) + " chỉ";
+  const statusBadge = s => ({
+    completed: '<span class="badge bg-green-lt">Hoàn thành</span>',
+    cancelled: '<span class="badge bg-red-lt">Đã huỷ</span>',
+    draft:     '<span class="badge bg-yellow-lt">Nháp</span>',
+  })[s] || `<span class="badge bg-secondary-lt">${s}</span>`;
+
+  window.loadInvoices = async function() {
+    const search = document.getElementById("search").value;
+    const status = document.getElementById("filter-status").value;
+    const from   = document.getElementById("filter-from").value;
+    const to     = document.getElementById("filter-to").value;
+    const tbody  = document.getElementById("invoice-rows");
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">Đang tải...</td></tr>`;
+
+    try {
+      const params = new URLSearchParams({ search, status, from, to });
+      const { invoices } = await api.get(`/api/gold/invoices?${params}`);
+      tbody.innerHTML = invoices.length ? invoices.map(inv => `
+        <tr>
+          <td class="fw-bold text-primary">${inv.invoice_number}</td>
+          <td>${inv.invoice_date}</td>
+          <td>${inv.customer_name || '<span class="text-muted">Khách vãng lai</span>'}</td>
+          <td class="text-muted">${inv.customer_phone || "—"}</td>
+          <td class="text-end">${fmtGold(inv.gold_delivered)}</td>
+          <td class="text-end ${parseFloat(inv.gold_customer_debt) > 0 ? 'text-danger fw-bold' : ''}">${fmtGold(inv.gold_customer_debt)}</td>
+          <td class="text-end">${fmtVND(inv.total_money)}</td>
+          <td class="text-end ${parseInt(inv.customer_money_debt) > 0 ? 'text-danger fw-bold' : ''}">${fmtVND(inv.customer_money_debt)}</td>
+          <td>${statusBadge(inv.status)}</td>
+          <td>
+            <a href="/gold-invoice.html?id=${inv.id}" class="btn btn-sm btn-ghost-primary me-1">Xem/In</a>
+          </td>
+        </tr>`).join("")
+        : `<tr><td colspan="10" class="text-center text-muted py-4">Chưa có hoá đơn nào</td></tr>`;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-danger">${err.message}</td></tr>`;
+    }
+  };
+
+  document.getElementById("search").addEventListener("keydown", e => { if (e.key === "Enter") loadInvoices(); });
+  loadInvoices();
+</script>
+</body>
+</html>

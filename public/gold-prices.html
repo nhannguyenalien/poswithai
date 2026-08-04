@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Giá Vàng — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">Giá Vàng & Loại Vàng</h2></div>
+          <div class="col-auto">
+            <button class="btn btn-outline-primary me-2" onclick="openAddTypeModal()">+ Thêm loại vàng</button>
+            <button class="btn btn-primary" onclick="openUpdatePriceModal()">📝 Cập nhật giá</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+
+        <!-- Bảng giá hôm nay -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title">💰 Bảng giá hiện tại</h3>
+            <div class="card-options">
+              <span class="text-muted small" id="price-as-of"></span>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Loại vàng</th>
+                  <th>Tuổi (purity)</th>
+                  <th class="text-end">Giá mua (đ/chỉ)</th>
+                  <th class="text-end">Giá bán (đ/chỉ)</th>
+                  <th class="text-muted">Cập nhật lúc</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="price-rows">
+                <tr><td colspan="6" class="text-center text-muted py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm loại vàng -->
+<div class="modal modal-blur fade" id="modal-type" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Thêm loại vàng</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label required">Tên loại vàng</label>
+          <input id="type-name" type="text" class="form-control" placeholder="VD: SJC, 18K, 24K"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tuổi (purity %)</label>
+          <input id="type-purity" type="number" class="form-control" step="0.01" placeholder="VD: 99.99 hoặc 75"/>
+          <small class="text-muted">SJC = 99.99 | 24K = 99.9 | 18K = 75 | 14K = 58.33</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="saveType()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal cập nhật giá -->
+<div class="modal modal-blur fade" id="modal-price" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Cập nhật giá vàng</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label required">Loại vàng</label>
+          <select id="price-type" class="form-select"></select>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col">
+            <label class="form-label required">Giá bán (đ/chỉ)</label>
+            <input id="price-sell" type="number" class="form-control" step="1000" placeholder="8350000"/>
+          </div>
+          <div class="col">
+            <label class="form-label">Giá mua (đ/chỉ)</label>
+            <input id="price-buy" type="number" class="form-control" step="1000" placeholder="8300000"/>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Hiệu lực từ</label>
+          <input id="price-date" type="datetime-local" class="form-control"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="savePrice()">Lưu giá</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND = n => n ? new Intl.NumberFormat("vi-VN").format(n) + " đ" : "—";
+  let allTypes = [];
+
+  async function loadPrices() {
+    try {
+      const { prices, as_of } = await api.get("/api/gold/prices");
+      allTypes = prices;
+      document.getElementById("price-as-of").textContent =
+        "Cập nhật: " + new Date(as_of).toLocaleString("vi-VN");
+
+      const tbody = document.getElementById("price-rows");
+      tbody.innerHTML = prices.length ? prices.map(p => `
+        <tr>
+          <td class="fw-bold">${p.name}</td>
+          <td>${p.purity ? p.purity + "%" : "—"}</td>
+          <td class="text-end text-blue">${fmtVND(p.buy_price)}</td>
+          <td class="text-end text-green fw-bold">${fmtVND(p.sell_price)}</td>
+          <td class="text-muted small">${p.price_updated_at ? new Date(p.price_updated_at).toLocaleString("vi-VN") : "Chưa có"}</td>
+          <td>
+            <button class="btn btn-sm btn-ghost-primary" onclick='quickUpdatePrice("${p.gold_type_id}", "${p.name}")'>Sửa giá</button>
+          </td>
+        </tr>`).join("")
+        : `<tr><td colspan="6" class="text-center text-muted py-4">Chưa có loại vàng nào. Thêm loại vàng trước.</td></tr>`;
+
+      // Update dropdown trong modal cập nhật giá
+      const sel = document.getElementById("price-type");
+      sel.innerHTML = prices.map(p => `<option value="${p.gold_type_id}">${p.name}</option>`).join("");
+    } catch (err) {
+      document.getElementById("price-rows").innerHTML =
+        `<tr><td colspan="6" class="text-danger">${err.message}</td></tr>`;
+    }
+  }
+
+  window.openAddTypeModal = function() {
+    document.getElementById("type-name").value = "";
+    document.getElementById("type-purity").value = "";
+    new bootstrap.Modal(document.getElementById("modal-type")).show();
+  };
+
+  window.saveType = async function() {
+    const name   = document.getElementById("type-name").value.trim();
+    const purity = parseFloat(document.getElementById("type-purity").value) || null;
+    if (!name) return alert("Tên là bắt buộc");
+    try {
+      await api.post("/api/gold/types", { name, purity });
+      bootstrap.Modal.getInstance(document.getElementById("modal-type")).hide();
+      loadPrices();
+    } catch (err) { alert(err.message); }
+  };
+
+  window.openUpdatePriceModal = function() {
+    document.getElementById("price-sell").value = "";
+    document.getElementById("price-buy").value  = "";
+    // Set datetime-local to now
+    const now = new Date();
+    now.setSeconds(0, 0);
+    document.getElementById("price-date").value = now.toISOString().slice(0, 16);
+    new bootstrap.Modal(document.getElementById("modal-price")).show();
+  };
+
+  window.quickUpdatePrice = function(typeId, typeName) {
+    document.getElementById("price-type").value = typeId;
+    openUpdatePriceModal();
+  };
+
+  window.savePrice = async function() {
+    const gold_type_id  = document.getElementById("price-type").value;
+    const sell_price    = parseInt(document.getElementById("price-sell").value);
+    const buy_price     = parseInt(document.getElementById("price-buy").value) || sell_price;
+    const effective_at  = document.getElementById("price-date").value;
+    if (!sell_price) return alert("Cần nhập giá bán");
+    try {
+      await api.post("/api/gold/prices", {
+        gold_type_id, sell_price, buy_price,
+        effective_at: effective_at ? new Date(effective_at).toISOString() : undefined,
+      });
+      bootstrap.Modal.getInstance(document.getElementById("modal-price")).hide();
+      loadPrices();
+    } catch (err) { alert(err.message); }
+  };
+
+  loadPrices();
+</script>
+</body>
+</html>

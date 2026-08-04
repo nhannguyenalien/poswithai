@@ -1,0 +1,8 @@
+name = "pos-app"
+compatibility_date = "2026-06-01"
+pages_build_output_dir = "public"
+
+# Set these as secrets, NOT here:
+#   wrangler pages secret put TURSO_DATABASE_URL
+#   wrangler pages secret put TURSO_AUTH_TOKEN
+# Never commit real tokens into this file or into git.

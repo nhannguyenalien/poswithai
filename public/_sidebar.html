@@ -1,0 +1,53 @@
+<!-- Copy đoạn này vào mỗi trang, đổi class "active" cho đúng menu item -->
+<aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  <div class="container-fluid">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <h1 class="navbar-brand navbar-brand-autodark">
+      <a href="/dashboard.html">🏪 POS</a>
+    </h1>
+    <div class="collapse navbar-collapse" id="navbar-menu">
+      <ul class="navbar-nav pt-lg-3">
+        <li class="nav-item" id="nav-dashboard">
+          <a class="nav-link" href="/dashboard.html">
+            <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+            <span class="nav-link-title">Tổng quan</span>
+          </a>
+        </li>
+        <li class="nav-item" id="nav-orders">
+          <a class="nav-link" href="/orders.html">
+            <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/></svg></span>
+            <span class="nav-link-title">Bán hàng</span>
+          </a>
+        </li>
+        <li class="nav-item" id="nav-products">
+          <a class="nav-link" href="/products.html">
+            <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg></span>
+            <span class="nav-link-title">Sản phẩm</span>
+          </a>
+        </li>
+        <li class="nav-item" id="nav-inventory">
+          <a class="nav-link" href="/inventory.html">
+            <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 1 1 0-4h14a2 2 0 1 1 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span>
+            <span class="nav-link-title">Kho hàng</span>
+          </a>
+        </li>
+        <li class="nav-item" id="nav-customers">
+          <a class="nav-link" href="/customers.html">
+            <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="nav-link-title">Khách hàng</span>
+          </a>
+        </li>
+      </ul>
+      <div class="mt-auto pb-3 px-3 border-top pt-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="flex-fill">
+            <div class="fw-medium" id="user-name">...</div>
+          </div>
+          <button class="btn btn-sm btn-ghost-light" id="btn-logout" title="Đăng xuất">↩</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>

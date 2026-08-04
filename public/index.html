@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>POS Đa Ngành — Phần mềm quản lý bán hàng cho Vàng Bạc, Thời Trang, Khách Sạn...</title>
+<meta name="description" content="Phần mềm POS quản lý bán hàng, tồn kho, hoá đơn cho nhiều ngành: Vàng bạc, Thời trang, Điện thoại, Mỹ phẩm, Thực phẩm, Khách sạn, Dịch vụ sửa chữa."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0f1729;
+    --navy-2:#161f38;
+    --gold:#d4a64a;
+    --gold-light:#f0cf85;
+    --ink:#0f1729;
+    --muted:#5b6472;
+    --line:#e7e9ee;
+    --bg:#fbfaf8;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,sans-serif;
+    color:var(--ink); background:var(--bg); line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  img,svg{display:block; max-width:100%}
+  a{color:inherit; text-decoration:none}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:13px 26px; border-radius:999px; font-weight:600; font-size:15px;
+    border:1px solid transparent; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+    white-space:nowrap;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-gold{ background:linear-gradient(135deg,var(--gold-light),var(--gold)); color:#241a04; box-shadow:0 8px 24px -8px rgba(212,166,74,.6); }
+  .btn-gold:hover{ box-shadow:0 12px 28px -6px rgba(212,166,74,.75); }
+  .btn-ghost-dark{ background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.25); }
+  .btn-ghost-dark:hover{ background:rgba(255,255,255,.16); }
+  .btn-outline{ background:#fff; color:var(--navy); border-color:var(--line); }
+  .btn-outline:hover{ border-color:var(--navy); }
+  .btn-block-dark{ background:var(--navy); color:#fff; }
+  .btn-block-dark:hover{ background:var(--navy-2); }
+
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700;
+    letter-spacing:.04em; text-transform:uppercase; color:var(--gold);
+    background:rgba(212,166,74,.12); padding:6px 14px; border-radius:999px;
+  }
+  h1,h2,h3{ margin:0; letter-spacing:-.02em; }
+  .section{ padding:96px 0; }
+  .section-head{ max-width:640px; margin:0 auto 56px; text-align:center; }
+  .section-head h2{ font-size:clamp(28px,4vw,40px); font-weight:800; margin-top:14px; }
+  .section-head p{ color:var(--muted); font-size:17px; margin-top:14px; }
+
+  /* ── NAV ───────────────────────────────────────── */
+  header.nav{
+    position:sticky; top:0; z-index:100;
+    background:rgba(251,250,248,.82); backdrop-filter:blur(10px);
+    border-bottom:1px solid transparent; transition:border-color .2s, box-shadow .2s;
+  }
+  header.nav.scrolled{ border-color:var(--line); box-shadow:0 2px 20px -8px rgba(0,0,0,.08); }
+  .nav-inner{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:19px; }
+  .brand .mark{
+    width:34px; height:34px; border-radius:10px;
+    background:linear-gradient(135deg,var(--navy),var(--navy-2));
+    display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:17px;
+  }
+  .nav-links{ display:flex; align-items:center; gap:32px; font-size:14.5px; font-weight:600; color:var(--muted); }
+  .nav-links a:hover{ color:var(--ink); }
+  .nav-cta{ display:flex; align-items:center; gap:10px; }
+  .nav-cta .btn{ padding:10px 20px; font-size:14px; }
+  .btn-nav-primary{ background:var(--navy); color:#fff; }
+  .btn-nav-primary:hover{ background:var(--navy-2); }
+  .burger{ display:none; }
+
+  /* ── HERO ──────────────────────────────────────── */
+  .hero{
+    position:relative; overflow:hidden;
+    background:radial-gradient(120% 100% at 50% -10%, #1c2542 0%, var(--navy) 55%, #0a0f1e 100%);
+    color:#fff; padding:88px 0 0;
+  }
+  .hero::before{
+    content:""; position:absolute; inset:0;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(212,166,74,.18), transparent 40%),
+      radial-gradient(circle at 85% 0%, rgba(99,131,255,.14), transparent 45%);
+    pointer-events:none;
+  }
+  .hero-inner{ position:relative; text-align:center; }
+  .hero h1{ font-size:clamp(34px,5.4vw,58px); font-weight:900; line-height:1.12; max-width:820px; margin:22px auto 0; }
+  .hero h1 span{ background:linear-gradient(135deg,var(--gold-light),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .hero p.lead{ max-width:600px; margin:22px auto 0; color:#c7ccdb; font-size:18px; }
+  .hero-ctas{ display:flex; gap:14px; justify-content:center; margin-top:34px; flex-wrap:wrap; }
+  .hero-note{ margin-top:18px; color:#8891a8; font-size:13.5px; }
+
+  /* Hero mockup (fake dashboard screenshot, pure CSS) */
+  .hero-stage{ position:relative; margin:64px auto 0; max-width:980px; padding:0 24px 0; }
+  .mock-browser{
+    background:#fff; border-radius:18px; box-shadow:0 40px 90px -30px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    overflow:hidden; transform:perspective(1400px) rotateX(4deg);
+  }
+  .mock-titlebar{ display:flex; align-items:center; gap:8px; padding:12px 16px; background:#f4f5f7; border-bottom:1px solid var(--line); }
+  .mock-dot{ width:10px; height:10px; border-radius:50%; background:#dcdfe4; }
+  .mock-body{ display:grid; grid-template-columns:190px 1fr; min-height:340px; }
+  .mock-side{ background:#0f1729; padding:18px 14px; }
+  .mock-side .mi{ display:flex; align-items:center; gap:9px; color:#aab1c5; font-size:12.5px; padding:9px 10px; border-radius:8px; margin-bottom:4px; }
+  .mock-side .mi.active{ background:rgba(212,166,74,.16); color:var(--gold-light); font-weight:700; }
+  .mock-main{ padding:22px 26px; background:#fbfbfc; }
+  .mock-kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+  .mock-kpi{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .mock-kpi .l{ font-size:10.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+  .mock-kpi .v{ font-size:19px; font-weight:800; margin-top:4px; }
+  .mock-kpi .v.g{ color:#1c9c5e; }
+  .mock-kpi .v.gold{ color:#b3822a; }
+  .mock-table{ background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .mock-row{ display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:8px; padding:10px 14px; font-size:12px; border-bottom:1px solid #f1f2f5; align-items:center; }
+  .mock-row.head{ font-weight:700; color:var(--muted); background:#f9f9fb; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .mock-pill{ display:inline-block; padding:2px 9px; border-radius:99px; font-size:10.5px; font-weight:700; }
+  .pill-green{ background:#e4f7ec; color:#1c9c5e; }
+  .pill-gold{ background:#fbf1dc; color:#b3822a; }
+  .pill-red{ background:#fdecec; color:#d64545; }
+
+  .float-card{
+    position:absolute; background:#fff; border-radius:14px; box-shadow:0 20px 45px -18px rgba(0,0,0,.35);
+    padding:12px 16px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:10px;
+  }
+  .float-card .ico{ width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .fc-1{ top:-6%; left:-4%; }
+  .fc-1 .ico{ background:#fbf1dc; }
+  .fc-2{ bottom:6%; right:-5%; }
+  .fc-2 .ico{ background:#e4f7ec; }
+  @media (max-width:860px){ .float-card{ display:none; } }
+
+  /* ── TRUST STRIP ───────────────────────────────── */
+  .trust{ background:#fff; border-bottom:1px solid var(--line); }
+  .trust-inner{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px 40px; padding:34px 24px; }
+  .trust-item{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; color:var(--navy); }
+  .trust-item .ico{ width:30px; height:30px; border-radius:8px; background:#f1eee7; display:flex; align-items:center; justify-content:center; font-size:15px; }
+
+  /* ── FEATURE GRID ──────────────────────────────── */
+  .feat-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  .feat-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:26px; transition:transform .18s ease, box-shadow .18s ease; }
+  .feat-card:hover{ transform:translateY(-4px); box-shadow:0 20px 40px -22px rgba(15,23,41,.25); }
+  .feat-ico{ width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:16px; background:linear-gradient(135deg,#fbf1dc,#f0dfb3); }
+  .feat-card h3{ font-size:17px; font-weight:700; }
+  .feat-card p{ color:var(--muted); font-size:14.5px; margin-top:8px; }
+  @media (max-width:900px){ .feat-grid{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:600px){ .feat-grid{ grid-template-columns:1fr; } }
+
+  /* ── PRODUCT TOUR (tabs) ───────────────────────── */
+  .tour{ background:#fff; border:1px solid var(--line); border-radius:24px; padding:12px; }
+  .tour-tabs{ display:flex; gap:6px; flex-wrap:wrap; padding:10px; }
+  .tour-tab{
+    padding:11px 18px; border-radius:999px; font-weight:700; font-size:13.5px; color:var(--muted);
+    cursor:pointer; border:1px solid transparent; transition:.15s;
+  }
+  .tour-tab.active{ background:var(--navy); color:#fff; }
+  .tour-tab:not(.active):hover{ background:#f4f4f6; }
+  .tour-panels{ position:relative; padding:10px; }
+  .tour-panel{ display:none; animation:fade .35s ease; }
+  .tour-panel.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .tour-panel-inner{ display:grid; grid-template-columns:1fr 1.3fr; gap:32px; align-items:center; padding:14px; }
+  .tour-copy .eyebrow{ margin-bottom:14px; }
+  .tour-copy h3{ font-size:24px; font-weight:800; margin-top:2px; }
+  .tour-copy p{ color:var(--muted); margin-top:12px; font-size:15px; }
+  .tour-copy ul{ list-style:none; padding:0; margin:18px 0 0; display:flex; flex-direction:column; gap:10px; }
+  .tour-copy li{ display:flex; gap:10px; font-size:14.5px; align-items:flex-start; }
+  .tour-copy li .chk{ width:20px; height:20px; border-radius:50%; background:#e4f7ec; color:#1c9c5e; display:flex; align-items:center; justify-content:center; font-size:12px; flex:none; margin-top:1px; }
+  @media (max-width:820px){ .tour-panel-inner{ grid-template-columns:1fr; } }
+
+  /* mini mockups reused inside tabs */
+  .panel-shot{ background:#fbfbfc; border:1px solid var(--line); border-radius:16px; padding:18px; }
+
+  /* ── VIDEO / DEMO SHOWCASE ─────────────────────── */
+  .demo-grid{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; }
+  @media (max-width:860px){ .demo-grid{ grid-template-columns:1fr; } }
+  .video-card{
+    position:relative; border-radius:20px; overflow:hidden; aspect-ratio:16/9;
+    background:linear-gradient(135deg,#1c2542,#0a0f1e);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    box-shadow:0 30px 60px -30px rgba(15,23,41,.5);
+  }
+  .video-card::before{
+    content:""; position:absolute; inset:0;
+    background-image:radial-gradient(circle at 25% 30%, rgba(212,166,74,.25), transparent 45%),
+                      radial-gradient(circle at 80% 80%, rgba(99,131,255,.2), transparent 45%);
+  }
+  .video-card .caption{ position:absolute; left:22px; bottom:18px; color:#fff; z-index:2; }
+  .video-card .caption b{ display:block; font-size:15px; }
+  .video-card .caption span{ font-size:12.5px; color:#aab1c5; }
+  .play-btn{
+    position:relative; z-index:2; width:74px; height:74px; border-radius:50%;
+    background:rgba(255,255,255,.14); border:1.5px solid rgba(255,255,255,.4);
+    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);
+    transition:transform .2s ease, background .2s ease;
+  }
+  .video-card:hover .play-btn{ transform:scale(1.08); background:rgba(255,255,255,.22); }
+  .play-btn svg{ margin-left:4px; }
+  .video-progress{ position:absolute; left:22px; right:22px; bottom:52px; height:3px; background:rgba(255,255,255,.2); border-radius:99px; z-index:2; }
+  .video-progress i{ display:block; width:34%; height:100%; background:var(--gold); border-radius:99px; }
+  .demo-side{ display:flex; flex-direction:column; gap:20px; }
+  .video-card.small{ aspect-ratio:auto; height:100%; padding:20px; align-items:flex-start; justify-content:flex-end; }
+  .video-card.small .play-btn{ width:52px; height:52px; position:absolute; top:20px; right:20px; }
+
+  /* ── INDUSTRIES ────────────────────────────────── */
+  .ind-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  @media (max-width:900px){ .ind-grid{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:520px){ .ind-grid{ grid-template-columns:1fr; } }
+  .ind-card{
+    background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px;
+    text-align:center; transition:.18s;
+  }
+  .ind-card:hover{ border-color:var(--gold); transform:translateY(-3px); box-shadow:0 16px 32px -20px rgba(15,23,41,.25); }
+  .ind-card .em{ font-size:30px; }
+  .ind-card h4{ font-size:14.5px; font-weight:700; margin-top:10px; }
+  .ind-card p{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+  /* ── GOLD SPOTLIGHT ────────────────────────────── */
+  .spotlight{
+    background:linear-gradient(135deg,#181f38,#0a0f1e); color:#fff; border-radius:28px;
+    padding:56px; display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center;
+    position:relative; overflow:hidden;
+  }
+  .spotlight::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 90% 10%, rgba(212,166,74,.22), transparent 45%); }
+  .spotlight-copy{ position:relative; }
+  .spotlight-copy h3{ font-size:28px; font-weight:800; margin-top:14px; }
+  .spotlight-copy p{ color:#c7ccdb; margin-top:14px; font-size:15px; }
+  .spotlight-list{ margin-top:22px; display:flex; flex-direction:column; gap:12px; }
+  .spotlight-list div{ display:flex; gap:10px; font-size:14px; }
+  .spotlight-list b{ color:var(--gold-light); }
+  .gold-mock{ position:relative; background:#fff; border-radius:16px; padding:20px; color:var(--ink); box-shadow:0 30px 70px -20px rgba(0,0,0,.5); }
+  .gold-mock h5{ font-size:13px; font-weight:800; margin-bottom:12px; }
+  .gm-row{ display:flex; justify-content:space-between; font-size:12.5px; padding:7px 0; border-bottom:1px dashed var(--line); }
+  .gm-row b{ font-weight:700; }
+  .gm-total{ margin-top:10px; background:#fbf1dc; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; font-weight:800; font-size:14px; color:#8a611c; }
+  @media (max-width:860px){ .spotlight{ grid-template-columns:1fr; padding:32px; } }
+
+  /* ── STEPS ─────────────────────────────────────── */
+  .steps{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; counter-reset:step; }
+  @media (max-width:900px){ .steps{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .steps{ grid-template-columns:1fr; } }
+  .step{ position:relative; padding-top:8px; }
+  .step .num{
+    width:38px; height:38px; border-radius:11px; background:var(--navy); color:var(--gold-light);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; margin-bottom:14px;
+  }
+  .step h4{ font-size:15.5px; font-weight:700; }
+  .step p{ font-size:13.5px; color:var(--muted); margin-top:6px; }
+
+  /* ── CTA BANNER ────────────────────────────────── */
+  .cta-banner{
+    background:linear-gradient(135deg,#1c2542,#0a0f1e); border-radius:28px; padding:64px 40px;
+    text-align:center; color:#fff; position:relative; overflow:hidden;
+  }
+  .cta-banner::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 50% 0%, rgba(212,166,74,.25), transparent 55%); }
+  .cta-banner h2{ position:relative; font-size:clamp(24px,3.6vw,34px); font-weight:800; }
+  .cta-banner p{ position:relative; color:#c7ccdb; margin-top:12px; font-size:15.5px; }
+  .cta-banner .hero-ctas{ position:relative; margin-top:28px; }
+
+  /* ── FOOTER ────────────────────────────────────── */
+  footer{ background:var(--navy); color:#aab1c5; padding:56px 0 28px; }
+  .footer-grid{ display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:32px; padding-bottom:36px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .footer-grid .brand{ color:#fff; }
+  .footer-grid p{ font-size:13.5px; margin-top:12px; max-width:280px; }
+  .footer-col h5{ color:#fff; font-size:13px; margin-bottom:14px; }
+  .footer-col a{ display:block; font-size:13.5px; padding:5px 0; }
+  .footer-col a:hover{ color:#fff; }
+  .footer-bottom{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; padding-top:22px; font-size:12.5px; }
+  @media (max-width:760px){ .footer-grid{ grid-template-columns:1fr 1fr; } }
+
+  @media (max-width:820px){
+    .nav-links{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav" id="siteNav">
+  <div class="wrap nav-inner">
+    <div class="brand"><span class="mark">🏪</span> POS Đa Ngành</div>
+    <nav class="nav-links">
+      <a href="#features">Tính năng</a>
+      <a href="#tour">Sản phẩm</a>
+      <a href="#industries">Ngành nghề</a>
+      <a href="#gold">Chuyên vàng bạc</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="/login.html" class="btn btn-outline">Đăng nhập</a>
+      <a href="/login.html" class="btn btn-nav-primary">Dùng thử miễn phí</a>
+    </div>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap hero-inner">
+    <span class="eyebrow">✦ Phần mềm quản lý bán hàng đa ngành</span>
+    <h1>Một phần mềm, <span>tám ngành nghề</span><br/>vận hành trên cùng một hệ thống</h1>
+    <p class="lead">Bán lẻ, tồn kho, hoá đơn, khách hàng — quản lý gọn trong một nơi. Có module chuyên biệt cho ngành vàng bạc: quy đổi tuổi vàng, tính tiền công, xuất hoá đơn điện tử tự động.</p>
+    <div class="hero-ctas">
+      <a href="/login.html" class="btn btn-gold">Bắt đầu dùng thử →</a>
+      <a href="#tour" class="btn btn-ghost-dark">Xem demo sản phẩm</a>
+    </div>
+    <div class="hero-note">Không cần cài đặt · Chạy trên trình duyệt · Dữ liệu lưu trữ an toàn</div>
+
+    <div class="hero-stage">
+      <div class="float-card fc-1"><span class="ico">💰</span> Tồn kho cập nhật realtime</div>
+      <div class="float-card fc-2"><span class="ico">🧾</span> Xuất hoá đơn VAT tự động</div>
+      <div class="mock-browser">
+        <div class="mock-titlebar"><span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span></div>
+        <div class="mock-body">
+          <div class="mock-side">
+            <div class="mi active">📊 &nbsp;Tổng quan</div>
+            <div class="mi">🧾 &nbsp;Bán lẻ POS</div>
+            <div class="mi">📦 &nbsp;Bán sỉ</div>
+            <div class="mi">🏷️ &nbsp;Sản phẩm</div>
+            <div class="mi">🗄️ &nbsp;Kho hàng</div>
+            <div class="mi">💰 &nbsp;Giá vàng</div>
+            <div class="mi">📈 &nbsp;Báo cáo</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-kpis">
+              <div class="mock-kpi"><div class="l">Doanh thu hôm nay</div><div class="v g">48.250.000đ</div></div>
+              <div class="mock-kpi"><div class="l">Số đơn</div><div class="v">27</div></div>
+              <div class="mock-kpi"><div class="l">Tổng SKU</div><div class="v">312</div></div>
+              <div class="mock-kpi"><div class="l">Tồn thấp</div><div class="v gold">6</div></div>
+            </div>
+            <div class="mock-table">
+              <div class="mock-row head"><div>Sản phẩm</div><div>SKU</div><div>Tồn</div><div>Trạng thái</div></div>
+              <div class="mock-row"><div>Nhẫn vàng 18K trơn</div><div>VANG-0182</div><div>4</div><div><span class="mock-pill pill-green">Còn hàng</span></div></div>
+              <div class="mock-row"><div>Dây chuyền bạc 925</div><div>BAC-0093</div><div>1</div><div><span class="mock-pill pill-gold">Sắp hết</span></div></div>
+              <div class="mock-row"><div>Váy linen cotton</div><div>TT-2210</div><div>0</div><div><span class="mock-pill pill-red">Hết hàng</span></div></div>
+              <div class="mock-row"><div>iPhone 15 128GB</div><div>DT-4471</div><div>9</div><div><span class="mock-pill pill-green">Còn hàng</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRUST STRIP ============ -->
+<div class="trust">
+  <div class="wrap trust-inner">
+    <div class="trust-item"><span class="ico">🏷️</span> 8 ngành nghề trong 1 hệ thống</div>
+    <div class="trust-item"><span class="ico">⚡</span> Tồn kho cập nhật theo thời gian thực</div>
+    <div class="trust-item"><span class="ico">🧾</span> Kết nối hoá đơn điện tử VAT</div>
+    <div class="trust-item"><span class="ico">🔐</span> Đăng nhập bảo mật qua Google</div>
+    <div class="trust-item"><span class="ico">☁️</span> Chạy trên nền tảng đám mây</div>
+  </div>
+</div>
+
+<!-- ============ FEATURES ============ -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Tính năng cốt lõi</span>
+      <h2>Mọi thứ để vận hành một cửa hàng</h2>
+      <p>Từ bán hàng, kho, khách hàng đến báo cáo — không cần nối nhiều phần mềm rời rạc.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-ico">🧾</div>
+        <h3>Bán lẻ &amp; bán sỉ</h3>
+        <p>Tạo đơn nhanh, áp dụng chiết khấu, theo dõi thanh toán và công nợ khách hàng ngay trên một màn hình.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-ico">🗄️</div>
+        <h3>Quản lý tồn kho</h3>
+        <p>Nhập/xuất/điều chỉnh kho, cảnh báo tồn thấp, lịch sử giao dịch minh bạch cho từng SKU.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-ico">🥇</div>
+        <h3>Module vàng bạc chuyên sâu</h3>
+        <p>Tính trọng lượng, tuổi vàng, quy đổi, tiền công, dê trả — đúng nghiệp vụ tiệm vàng thực tế.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-ico">🧮</div>
+        <h3>Hoá đơn điện tử (VAT)</h3>
+        <p>Kết nối trực tiếp nhà cung cấp hoá đơn điện tử, xuất VAT ngay từ hoá đơn bán hàng, không nhập tay 2 lần.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-ico">👥</div>
+        <h3>Khách hàng &amp; công nợ</h3>
+        <p>Lưu lịch sử mua hàng, theo dõi công nợ tiền lẫn công nợ vàng theo từng khách.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-ico">📈</div>
+        <h3>Báo cáo trực quan</h3>
+        <p>Doanh thu, tồn kho, hàng bán chậm — số liệu cập nhật theo ngày để ra quyết định nhanh.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRODUCT TOUR ============ -->
+<section class="section" id="tour" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Trải nghiệm sản phẩm</span>
+      <h2>Xem qua từng phần của hệ thống</h2>
+      <p>Giao diện mô phỏng dưới đây minh hoạ đúng luồng thao tác thật trong phần mềm.</p>
+    </div>
+
+    <div class="tour">
+      <div class="tour-tabs" id="tourTabs">
+        <div class="tour-tab active" data-tab="pos">Bán lẻ POS</div>
+        <div class="tour-tab" data-tab="stock">Kho hàng</div>
+        <div class="tour-tab" data-tab="gold">Hoá đơn vàng</div>
+        <div class="tour-tab" data-tab="report">Báo cáo</div>
+      </div>
+
+      <div class="tour-panels">
+
+        <div class="tour-panel active" data-panel="pos">
+          <div class="tour-panel-inner">
+            <div class="tour-copy">
+              <span class="eyebrow">Bán lẻ POS</span>
+              <h3>Lên đơn trong vài giây</h3>
+              <p>Tìm sản phẩm theo tên/SKU/mã vạch, thêm vào giỏ, áp dụng chiết khấu và nhận thanh toán ngay tại quầy.</p>
+              <ul>
+                <li><span class="chk">✓</span> Tìm kiếm nhanh bằng barcode hoặc tên</li>
+                <li><span class="chk">✓</span> Tự động kiểm tra tồn kho trước khi bán</li>
+                <li><span class="chk">✓</span> In hoá đơn / gửi lại cho khách</li>
+              </ul>
+            </div>
+            <div class="panel-shot">
+              <div class="mock-table">
+                <div class="mock-row head"><div>Món hàng</div><div>SL</div><div>Đơn giá</div><div>Thành tiền</div></div>
+                <div class="mock-row"><div>Nhẫn kiểu 3 chỉ</div><div>1</div><div>28.500.000đ</div><div>28.500.000đ</div></div>
+                <div class="mock-row"><div>Dây mặt đá</div><div>1</div><div>18.200.000đ</div><div>18.200.000đ</div></div>
+                <div class="mock-row"><div>Bông tai 1 chỉ</div><div>2</div><div>9.100.000đ</div><div>18.200.000đ</div></div>
+              </div>
+              <div class="gm-total" style="margin-top:12px"><span>Tổng thanh toán</span><span>64.900.000đ</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tour-panel" data-panel="stock">
+          <div class="tour-panel-inner">
+            <div class="tour-copy">
+              <span class="eyebrow">Kho hàng</span>
+              <h3>Không bao giờ bán vượt tồn</h3>
+              <p>Mỗi lượt nhập/xuất/kiểm kho đều được ghi log, cảnh báo ngay khi hàng sắp hết.</p>
+              <ul>
+                <li><span class="chk">✓</span> Nhập kho theo lô, ghi giá vốn</li>
+                <li><span class="chk">✓</span> Điều chỉnh sau kiểm kê thực tế</li>
+                <li><span class="chk">✓</span> Cảnh báo tồn thấp theo ngưỡng tự đặt</li>
+              </ul>
+            </div>
+            <div class="panel-shot">
+              <div class="mock-table">
+                <div class="mock-row head"><div>Sản phẩm</div><div>SKU</div><div>Tồn</div><div>Trạng thái</div></div>
+                <div class="mock-row"><div>Lắc tay bạc 925</div><div>BAC-0041</div><div>2</div><div><span class="mock-pill pill-gold">Sắp hết</span></div></div>
+                <div class="mock-row"><div>Áo sơ mi linen</div><div>TT-1187</div><div>14</div><div><span class="mock-pill pill-green">Còn hàng</span></div></div>
+                <div class="mock-row"><div>Kem dưỡng 50ml</div><div>MP-0362</div><div>0</div><div><span class="mock-pill pill-red">Hết hàng</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tour-panel" data-panel="gold">
+          <div class="tour-panel-inner">
+            <div class="tour-copy">
+              <span class="eyebrow">Hoá đơn vàng</span>
+              <h3>Đúng nghiệp vụ tiệm vàng</h3>
+              <p>Tự động trừ hột, quy đổi theo tuổi vàng, cộng tiền công, đối trừ dê khách trả — ra tổng tiền chính xác.</p>
+              <ul>
+                <li><span class="chk">✓</span> Quy đổi tuổi vàng tự động (99, 75, 61...)</li>
+                <li><span class="chk">✓</span> Đối trừ vàng cũ khách trả (dê)</li>
+                <li><span class="chk">✓</span> Xuất hoá đơn VAT ngay sau khi lưu</li>
+              </ul>
+            </div>
+            <div class="panel-shot">
+              <div class="gold-mock" style="box-shadow:none">
+                <h5>TÍNH TOÁN HOÁ ĐƠN VÀNG</h5>
+                <div class="gm-row"><span>Vàng giao mới (quy đổi 99)</span><b>12.680 chỉ</b></div>
+                <div class="gm-row"><span>Dê khách trả</span><b>−4.230 chỉ</b></div>
+                <div class="gm-row"><span>Tiền công</span><b>1.850.000đ</b></div>
+                <div class="gm-total"><span>Tổng thanh toán</span><span>72.415.000đ</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tour-panel" data-panel="report">
+          <div class="tour-panel-inner">
+            <div class="tour-copy">
+              <span class="eyebrow">Báo cáo</span>
+              <h3>Số liệu rõ ràng mỗi ngày</h3>
+              <p>Theo dõi doanh thu, giá trị tồn kho và các mặt hàng bán chậm để điều chỉnh nhập hàng kịp thời.</p>
+              <ul>
+                <li><span class="chk">✓</span> Doanh thu theo ngày / khoảng thời gian</li>
+                <li><span class="chk">✓</span> Giá trị tồn kho theo ngành hàng</li>
+                <li><span class="chk">✓</span> Top sản phẩm tồn lâu không bán</li>
+              </ul>
+            </div>
+            <div class="panel-shot">
+              <div class="mock-kpis" style="grid-template-columns:repeat(3,1fr)">
+                <div class="mock-kpi"><div class="l">Doanh thu tháng</div><div class="v g">842.500.000đ</div></div>
+                <div class="mock-kpi"><div class="l">Giá trị tồn kho</div><div class="v">1.240.000.000đ</div></div>
+                <div class="mock-kpi"><div class="l">SKU tồn lâu</div><div class="v gold">18</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIDEO / DEMO SHOWCASE ============ -->
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Xem hoạt động thực tế</span>
+      <h2>Video giới thiệu &amp; hướng dẫn sử dụng</h2>
+      <p>Video demo chi tiết đang được cập nhật — bấm vào để xem trước bố cục.</p>
+    </div>
+    <div class="demo-grid">
+      <div class="video-card" onclick="alert('Video demo sẽ sớm được cập nhật tại đây.')">
+        <div class="video-progress"><i></i></div>
+        <div class="play-btn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <div class="caption"><b>Tổng quan phần mềm trong 3 phút</b><span>Demo · 3:12</span></div>
+      </div>
+      <div class="demo-side">
+        <div class="video-card small" style="flex:1" onclick="alert('Video hướng dẫn sẽ sớm được cập nhật.')">
+          <div class="play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="caption"><b>Hướng dẫn lập hoá đơn vàng</b><span>Demo · 2:04</span></div>
+        </div>
+        <div class="video-card small" style="flex:1" onclick="alert('Video hướng dẫn sẽ sớm được cập nhật.')">
+          <div class="play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="caption"><b>Quản lý tồn kho &amp; kiểm hàng</b><span>Demo · 1:47</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INDUSTRIES ============ -->
+<section class="section" id="industries" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Đa ngành nghề</span>
+      <h2>Một hệ thống cho nhiều mô hình kinh doanh</h2>
+      <p>Mỗi ngành có bộ thuộc tính sản phẩm riêng — thêm ngành mới không cần lập trình lại.</p>
+    </div>
+    <div class="ind-grid">
+      <div class="ind-card"><div class="em">🥇</div><h4>Vàng</h4><p>Trọng lượng, tuổi vàng, tiền công</p></div>
+      <div class="ind-card"><div class="em">🥈</div><h4>Bạc</h4><p>Độ tinh khiết, trọng lượng</p></div>
+      <div class="ind-card"><div class="em">👗</div><h4>Thời trang</h4><p>Size, màu sắc, chất liệu, mùa</p></div>
+      <div class="ind-card"><div class="em">📱</div><h4>Điện thoại</h4><p>IMEI, dung lượng, tình trạng máy</p></div>
+      <div class="ind-card"><div class="em">💄</div><h4>Mỹ phẩm</h4><p>Dung tích, hạn sử dụng, xuất xứ</p></div>
+      <div class="ind-card"><div class="em">🍜</div><h4>Thực phẩm</h4><p>HSD, nhiệt độ bảo quản, dị ứng</p></div>
+      <div class="ind-card"><div class="em">🏨</div><h4>Khách sạn</h4><p>Loại phòng, giường, tiện nghi</p></div>
+      <div class="ind-card"><div class="em">🔧</div><h4>Dịch vụ / Sửa chữa</h4><p>Thời gian thực hiện, bảo hành</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GOLD SPOTLIGHT ============ -->
+<section class="section" id="gold" style="padding-top:0">
+  <div class="wrap">
+    <div class="spotlight">
+      <div class="spotlight-copy">
+        <span class="eyebrow">Chuyên sâu ngành vàng bạc</span>
+        <h3>Nghiệp vụ tiệm vàng, tính đúng từng ly</h3>
+        <p>Không phải phần mềm bán hàng chung chung gán ép cho ngành vàng — đây là module được xây riêng theo cách tiệm vàng thực sự tính toán.</p>
+        <div class="spotlight-list">
+          <div>🔸 <span><b>Quy đổi tuổi vàng</b> tự động theo tỷ lệ so với vàng 99, áp dụng cho cả hàng bán ra lẫn dê khách trả.</span></div>
+          <div>🔸 <span><b>Trừ hột/đá</b> đúng trọng lượng trước khi tính tiền, tránh sai lệch thủ công.</span></div>
+          <div>🔸 <span><b>Đối trừ công nợ</b> vàng và tiền riêng biệt, theo dõi rõ ràng cho từng khách.</span></div>
+          <div>🔸 <span><b>Xuất hoá đơn điện tử VAT</b> trực tiếp từ hoá đơn vàng, không nhập liệu 2 lần.</span></div>
+        </div>
+      </div>
+      <div class="gold-mock">
+        <h5>THỐNG KÊ VÀNG — HÓA ĐƠN #HV20260711</h5>
+        <div class="gm-row"><span>Vàng giao mới (sau quy đổi)</span><b>9.850 chỉ</b></div>
+        <div class="gm-row"><span>Dê khách trả (quy đổi)</span><b>3.120 chỉ</b></div>
+        <div class="gm-row"><span>Còn lại</span><b>6.730 chỉ</b></div>
+        <div class="gm-row"><span>Tiền công chế tác</span><b>2.140.000đ</b></div>
+        <div class="gm-total"><span>Tổng hoá đơn</span><span>58.360.000đ</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Bắt đầu dễ dàng</span>
+      <h2>Sẵn sàng vận hành chỉ trong 4 bước</h2>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h4>Đăng nhập bằng Google</h4><p>Không cần nhớ thêm mật khẩu, bảo mật theo chuẩn OAuth.</p></div>
+      <div class="step"><div class="num">2</div><h4>Khai báo thông tin tiệm</h4><p>Điền tên, chọn ngành nghề đang kinh doanh.</p></div>
+      <div class="step"><div class="num">3</div><h4>Nhập sản phẩm &amp; tồn kho</h4><p>Thêm sản phẩm theo mẫu riêng của từng ngành.</p></div>
+      <div class="step"><div class="num">4</div><h4>Bắt đầu bán hàng</h4><p>Lên đơn, in hoá đơn, theo dõi báo cáo ngay.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-banner">
+      <h2>Sẵn sàng chuyển đổi cửa hàng của bạn?</h2>
+      <p>Bắt đầu dùng thử ngay hôm nay — không cần cài đặt phần mềm.</p>
+      <div class="hero-ctas">
+        <a href="/login.html" class="btn btn-gold">Dùng thử miễn phí →</a>
+        <a href="#tour" class="btn btn-ghost-dark">Xem lại demo</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="brand"><span class="mark">🏪</span> POS Đa Ngành</div>
+        <p>Phần mềm quản lý bán hàng cho nhiều mô hình kinh doanh — từ vàng bạc, thời trang đến khách sạn.</p>
+      </div>
+      <div class="footer-col">
+        <h5>Sản phẩm</h5>
+        <a href="#features">Tính năng</a>
+        <a href="#tour">Trải nghiệm</a>
+        <a href="#gold">Ngành vàng bạc</a>
+      </div>
+      <div class="footer-col">
+        <h5>Ngành nghề</h5>
+        <a href="#industries">Vàng · Bạc</a>
+        <a href="#industries">Thời trang · Mỹ phẩm</a>
+        <a href="#industries">Khách sạn · Dịch vụ</a>
+      </div>
+      <div class="footer-col">
+        <h5>Truy cập</h5>
+        <a href="/login.html">Đăng nhập</a>
+        <a href="/login.html">Dùng thử miễn phí</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 POS Đa Ngành. Đã đăng ký bản quyền.</span>
+      <span>Được xây dựng cho người bán hàng Việt Nam 🇻🇳</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Nav shadow on scroll
+  const nav = document.getElementById('siteNav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 8);
+  });
+
+  // Product tour tabs
+  const tabs = document.querySelectorAll('.tour-tab');
+  const panels = document.querySelectorAll('.tour-panel');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelector(`.tour-panel[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+    });
+  });
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Danh mục — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col">
+            <h2 class="page-title">Danh mục sản phẩm</h2>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" onclick="openAddModal()">+ Thêm danh mục</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Tên danh mục</th>
+                  <th>Danh mục cha</th>
+                  <th class="text-center">Số sản phẩm</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cat-rows">
+                <tr><td colspan="4" class="text-muted text-center py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm danh mục -->
+<div class="modal modal-blur fade" id="modal-cat" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Thêm danh mục</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label required">Tên danh mục</label>
+          <input id="cat-name" type="text" class="form-control" placeholder="VD: Vàng nhẫn"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Danh mục cha (tuỳ chọn)</label>
+          <select id="cat-parent" class="form-select">
+            <option value="">— Không có —</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="saveCategory()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  async function loadCategories() {
+    const tbody = document.getElementById("cat-rows");
+    try {
+      const { categories } = await api.get("/api/categories");
+      tbody.innerHTML = categories.length
+        ? categories.map(c => `
+          <tr>
+            <td class="fw-medium">${c.name}</td>
+            <td>${c.parent_name ? `<span class="badge bg-blue-lt">${c.parent_name}</span>` : '<span class="text-muted">—</span>'}</td>
+            <td class="text-center"><span class="badge bg-secondary-lt">${c.product_count}</span></td>
+            <td></td>
+          </tr>`).join("")
+        : `<tr><td colspan="4" class="text-muted text-center py-4">Chưa có danh mục</td></tr>`;
+
+      // Update parent dropdown
+      const sel = document.getElementById("cat-parent");
+      sel.innerHTML = `<option value="">— Không có —</option>` +
+        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-danger">${err.message}</td></tr>`;
+    }
+  }
+
+  window.openAddModal = function() {
+    document.getElementById("cat-name").value = "";
+    new bootstrap.Modal(document.getElementById("modal-cat")).show();
+  };
+
+  window.saveCategory = async function() {
+    const name      = document.getElementById("cat-name").value.trim();
+    const parent_id = document.getElementById("cat-parent").value;
+    if (!name) return alert("Tên là bắt buộc");
+    try {
+      await api.post("/api/categories", { name, parent_id: parent_id || null });
+      bootstrap.Modal.getInstance(document.getElementById("modal-cat")).hide();
+      loadCategories();
+    } catch (err) { alert(err.message); }
+  };
+
+  loadCategories();
+</script>
+</body>
+</html>

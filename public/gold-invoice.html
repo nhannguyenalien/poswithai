@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Hoá Đơn Vàng</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <style>
+    /* ── TOOLBAR ── */
+    .invoice-toolbar {
+      position: sticky; top: 0; z-index: 200;
+      background: #1e293b; padding: 10px 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .invoice-toolbar .btn { font-size: .85rem; }
+    .gold-price-input {
+      background: #fff; border: 1px solid #475569; color: #000;
+      padding: 4px 8px; border-radius: 4px;
+      font-weight: 700; font-size: 1rem; width: 130px; text-align: right;
+    }
+
+    /* ── HOÁ ĐƠN A4 ── */
+    .invoice-wrap { background: #e5e7eb; padding: 24px 0; min-height: calc(100vh - 60px); }
+    .a4 {
+      font-family: 'Times New Roman', Times, serif;
+      background: #fff; max-width: 210mm;
+      margin: 0 auto; padding: 28px 36px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      font-size: 14px; color: #000;
+    }
+    .a4 h2 { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+    .a4 .sub-title { text-align: center; font-style: italic; margin-bottom: 14px; color: #555; }
+
+    /* Thông tin khách */
+    .cust-grid { display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; gap: 4px 10px; margin-bottom: 12px; align-items: center; }
+    .cust-grid label { font-weight: 700; white-space: nowrap; }
+
+    /* Input style trong hoá đơn */
+    .inv-input {
+      font-family: 'Times New Roman', Times, serif; font-size: 14px;
+      border: none; border-bottom: 1px dashed #aaa;
+      padding: 2px 4px; width: 100%; background: transparent;
+    }
+    .inv-input:focus { outline: none; background: #fffde7; }
+    .inv-input.num { text-align: right; }
+    .inv-input[readonly] { color: #1a56db; font-weight: 700; border-bottom: none; }
+
+    /* Tables */
+    .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 13px; }
+    .inv-table th, .inv-table td { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }
+    .inv-table th { background: #f3f4f6; text-align: center; font-weight: 700; font-size: 12px; }
+    .inv-table td .inv-input { border: none; padding: 0; }
+    .inv-table tfoot td { background: #f9fafb; font-weight: 700; }
+    .inv-table td.center { text-align: center; }
+    .inv-table td.right { text-align: right; }
+    .del-btn { background: transparent; border: none; color: #dc2626; cursor: pointer; font-size: 14px; font-weight: 700; padding: 0 2px; }
+    .add-row-btn { font-size: 11px; padding: 2px 8px; margin: 4px 0; cursor: pointer; }
+
+    /* Thống kê */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+    .stat-section h4 { font-size: 15px; font-weight: 700; text-decoration: underline; margin-bottom: 6px; }
+    .stat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .stat-table th, .stat-table td { padding: 3px 6px; }
+    .stat-table th { text-align: left; font-weight: 700; white-space: nowrap; }
+    .stat-table td { border-bottom: 1px dotted #ddd; }
+    .debt { color: #dc2626; }
+    .sub-gold-table { margin-top: 8px; width: 100%; border-collapse: collapse; font-size: 12px; }
+    .sub-gold-table th, .sub-gold-table td { border: 1px solid #ccc; padding: 3px; text-align: center; }
+
+    /* Print */
+    @media print {
+      .invoice-toolbar { display: none !important; }
+      .invoice-wrap { background: #fff; padding: 0; }
+      .a4 { box-shadow: none; max-width: 100%; margin: 0; }
+      .no-print { display: none !important; }
+      .del-btn, .add-row-btn { display: none !important; }
+      .inv-input { border: none !important; }
+      .inv-input[readonly] { color: #000 !important; }
+    }
+  </style>
+</head>
+<body style="margin:0; background:#e5e7eb;">
+
+<!-- Toolbar -->
+<div class="invoice-toolbar no-print">
+  <a href="/gold-invoices.html" class="btn btn-sm btn-ghost-light text-white">← Danh sách</a>
+  <div class="flex-fill"></div>
+  <span class="text-white me-1">Giá vàng 99:</span>
+  <input id="gia-vang" type="number" class="gold-price-input" value="8350000" step="10000" oninput="calcAll()"/>
+  <span class="text-white">đ/chỉ</span>
+  <div class="flex-fill"></div>
+  <button class="btn btn-sm btn-success" id="btn-save" onclick="saveInvoice()">💾 Lưu & In</button>
+  <button class="btn btn-sm btn-warning text-dark" onclick="calcAll()">🔄 Tính lại</button>
+  <button class="btn btn-sm btn-info text-white" id="btn-einvoice" onclick="issueEInvoice()" disabled>🧾 Xuất hoá đơn VAT</button>
+  <span id="save-status" class="text-white small ms-2"></span>
+  <span id="einvoice-status" class="text-white small ms-2"></span>
+</div>
+
+<!-- Hoá đơn A4 -->
+<div class="invoice-wrap">
+<div class="a4" id="invoice">
+
+  <h2>HOÁ ĐƠN BÁN HÀNG VÀNG</h2>
+  <div class="sub-title" id="invoice-number-display">— Lập mới —</div>
+
+  <!-- Thông tin khách -->
+  <div class="cust-grid">
+    <label>Khách hàng:</label>
+    <input id="khach-hang" class="inv-input" type="text" placeholder="Họ tên..."/>
+    <label>Địa chỉ:</label>
+    <input id="dia-chi" class="inv-input" type="text"/>
+    <label>SĐT:</label>
+    <input id="dien-thoai" class="inv-input" type="text"/>
+    <label>Ngày:</label>
+    <input id="ngay-toa" class="inv-input" type="text" style="width:120px"/>
+    <label>MST khách (nếu có):</label>
+    <input id="khach-mst" class="inv-input" type="text" placeholder="Để trống nếu khách lẻ"/>
+    <label>Tên công ty (nếu có):</label>
+    <input id="khach-cty" class="inv-input" type="text" placeholder="Để trống nếu khách lẻ"/>
+  </div>
+
+  <!-- BẢNG 1: Hàng bán ra -->
+  <table class="inv-table" id="tbl-ban">
+    <thead>
+      <tr>
+        <th style="width:28px">STT</th>
+        <th>Tên hàng</th>
+        <th style="width:36px">SL</th>
+        <th style="width:72px">TL vàng+hột<br/><small>(1 món, chỉ)</small></th>
+        <th style="width:62px">TL hột<br/><small>(1 món)</small></th>
+        <th style="width:70px">TL vàng<br/><small>(× SL)</small></th>
+        <th style="width:54px">Tuổi</th>
+        <th style="width:72px">Sau quy đổi<br/><small>(chỉ 99)</small></th>
+        <th style="width:80px">Giá công<br/><small>(1 món, đ)</small></th>
+        <th class="no-print" style="width:20px"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody-ban"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="text-align:right">Tổng hàng giao:</td>
+        <td class="center" id="br-tong-sl">0</td>
+        <td class="right" id="br-tong-all">0.00</td>
+        <td class="right" id="br-tong-hot">0.00</td>
+        <td class="right" id="br-tong-vang">0.00</td>
+        <td></td>
+        <td class="right" id="br-tong-quydoi" style="color:#1a56db">0.000</td>
+        <td class="right" id="br-tong-cong">0</td>
+        <td class="no-print"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <button class="add-row-btn no-print btn btn-sm btn-outline-success" onclick="addBanRow()">+ Thêm hàng bán</button>
+
+  <br/>
+
+  <!-- BẢNG 2: Dê khách trả -->
+  <table class="inv-table" id="tbl-de">
+    <thead>
+      <tr>
+        <th>Loại dê (vàng cũ)</th>
+        <th style="width:90px">TL luôn hột<br/><small>(chỉ)</small></th>
+        <th style="width:70px">TL hột<br/><small>(chỉ)</small></th>
+        <th style="width:80px">TL vàng</th>
+        <th style="width:90px">Tỷ lệ quy đổi<br/><small>VD: 97.5/99</small></th>
+        <th style="width:90px">Sau quy đổi<br/><small>(chỉ 99)</small></th>
+        <th class="no-print" style="width:20px"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody-de"></tbody>
+    <tfoot>
+      <tr>
+        <td style="text-align:right">Tổng dê trả:</td>
+        <td class="right" id="de-tong-all">0.00</td>
+        <td class="right" id="de-tong-hot">0.00</td>
+        <td class="right" id="de-tong-vang">0.00</td>
+        <td></td>
+        <td class="right" id="de-tong-quydoi" style="color:#1a56db">0.000</td>
+        <td class="no-print"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <button class="add-row-btn no-print btn btn-sm btn-outline-secondary" onclick="addDeRow()">+ Thêm dê trả</button>
+
+  <!-- Thống kê -->
+  <div class="stats-grid">
+
+    <!-- Cột trái: Vàng -->
+    <div class="stat-section">
+      <h4>Thống kê Vàng (NT99)</h4>
+      <table class="stat-table">
+        <tr><th>Vàng giao mới:</th>
+            <td><input id="sum-vang-giao" class="inv-input num" readonly/></td></tr>
+        <tr><th>Nợ cũ (vàng):</th>
+            <td><input id="sum-no-cu-vang" class="inv-input num" type="number" step="0.001" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th>Vàng chuyển/nhận:</th>
+            <td><input id="sum-vang-chuyen" class="inv-input num" type="number" step="0.001" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th>Dê khách trả:</th>
+            <td><input id="sum-de-tra" class="inv-input num" readonly/></td></tr>
+        <tr><th>Còn lại:</th>
+            <td><input id="sum-con-lai-vang" class="inv-input num" readonly/></td></tr>
+        <tr><th>KH thanh toán (vàng):</th>
+            <td><input id="sum-kh-tra-vang" class="inv-input num" type="number" step="0.001" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th>TL quy tiền (chỉ):</th>
+            <td><input id="sub-tl-vang" class="inv-input num" type="number" step="0.001" value="0" readonly tabindex="-1"/></td></tr>
+        <tr><th class="debt">Khách nợ vàng:</th>
+            <td><input id="sum-khach-no-vang" class="inv-input num debt" readonly/></td></tr>
+      </table>
+      <!-- Quy tiền -->
+      <table class="sub-gold-table">
+        <thead><tr><th>TL quy tiền (chỉ)</th><th>× Giá vàng/chỉ</th><th>= Thành tiền</th></tr></thead>
+        <tbody><tr>
+          <td><input id="sub-tl-vang-show" class="inv-input num" readonly style="width:60px"/></td>
+          <td><input id="sub-don-gia" class="inv-input num" readonly style="width:80px"/></td>
+          <td><input id="sub-thanh-tien" class="inv-input num" readonly style="width:100px; color:#1a56db; font-weight:700"/></td>
+        </tr></tbody>
+      </table>
+    </div>
+
+    <!-- Cột phải: Tiền -->
+    <div class="stat-section">
+      <h4>Thống kê Tiền</h4>
+      <table class="stat-table">
+        <tr><th>Tổng tiền công:</th>
+            <td><input id="sum-tien-cong" class="inv-input num" readonly/></td></tr>
+        <tr><th>Chiết khấu (%):</th>
+            <td><input id="sum-chiet-khau" class="inv-input num" type="number" value="0" step="0.1" oninput="calcAll()"/></td></tr>
+        <tr><th>Nợ cũ (tiền):</th>
+            <td><input id="sum-no-cu-tien" class="inv-input num" type="number" step="1000" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th>Tiền công trả khách:</th>
+            <td><input id="sum-cong-tra-kh" class="inv-input num" type="number" step="1000" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th>Tiền vàng thanh toán:</th>
+            <td><input id="sum-tien-vang" class="inv-input num" readonly/></td></tr>
+        <tr><th>Giảm cả toa:</th>
+            <td><input id="sum-giam-toa" class="inv-input num" type="number" step="1000" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th style="font-size:15px">TỔNG CỘNG:</th>
+            <td><input id="sum-tong-tien" class="inv-input num" readonly style="font-size:15px; color:#1a56db"/></td></tr>
+        <tr><th>Khách thanh toán:</th>
+            <td><input id="sum-kh-thanh-toan" class="inv-input num" type="number" step="1000" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th class="debt">Khách nợ tiền:</th>
+            <td><input id="sum-khach-no-tien" class="inv-input num debt" readonly/></td></tr>
+      </table>
+    </div>
+
+  </div><!-- /stats-grid -->
+
+</div><!-- /a4 -->
+</div><!-- /invoice-wrap -->
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin, getToken } from "/js/auth.js";
+requireLogin();
+  initSidebar();
+
+// ── HELPERS ─────────────────────────────────────────────
+const fmt    = n => Number(n).toLocaleString("vi-VN");
+const fmtG   = n => Number(n).toFixed(2);
+const fmtG3  = n => Number(n).toFixed(3);
+const $      = id => document.getElementById(id);
+const valF   = id => parseFloat($(id)?.value) || 0;
+
+// ── INIT ────────────────────────────────────────────────
+const params   = new URLSearchParams(location.search);
+const invoiceId = params.get("id");
+let currentInvoiceId = invoiceId; // cập nhật sau khi Lưu thành công (invoiceId ở trên là const)
+const today    = new Date();
+$("ngay-toa").value =
+  `${today.getDate().toString().padStart(2,"0")}/${(today.getMonth()+1).toString().padStart(2,"0")}/${today.getFullYear()}`;
+
+// Load invoice nếu xem lại
+if (invoiceId) loadInvoice(invoiceId);
+else { addBanRow(); addBanRow(); addBanRow(); addDeRow(); addDeRow(); calcAll(); }
+
+// Load giá vàng mới nhất từ API
+(async () => {
+  try {
+    const { prices } = await fetch("/api/gold/prices",{headers:{Authorization:"Bearer "+getToken()}}).then(r=>r.json());
+    // Lấy giá SJC hoặc cái đầu tiên có sell_price
+    const p = prices.find(x=>x.sell_price) || prices[0];
+    if (p?.sell_price) $("gia-vang").value = p.sell_price;
+    calcAll();
+  } catch {}
+})();
+
+// ── BẢNG BÁN RA ─────────────────────────────────────────
+let banCount = 0;
+window.addBanRow = function(data={}) {
+  banCount++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td class="center">${banCount}</td>
+    <td><input class="inv-input br-ten" type="text" value="${data.product_name||""}" placeholder="Tên món..."/></td>
+    <td><input class="inv-input num br-sl" type="number" value="${data.quantity||1}" min="1" oninput="calcAll()"/></td>
+    <td><input class="inv-input num br-gross" type="number" step="0.001" value="${data.unit_gross_weight||""}" placeholder="chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num br-stone" type="number" step="0.001" value="${data.unit_stone_weight||""}" placeholder="chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num br-vang" readonly tabindex="-1"/></td>
+    <td><input class="inv-input num br-tuoi" type="number" step="0.5" value="${data.gold_purity||99}" oninput="calcAll()"/></td>
+    <td><input class="inv-input num br-quydoi" readonly tabindex="-1" style="color:#1a56db"/></td>
+    <td><input class="inv-input num br-cong" type="number" step="1000" value="${data.unit_making_fee||""}" placeholder="đ" oninput="calcAll()"/></td>
+    <td class="no-print"><button class="del-btn" onclick="this.closest('tr').remove(); reindexBan(); calcAll();">×</button></td>
+  `;
+  $("tbody-ban").appendChild(tr);
+};
+
+function reindexBan() {
+  $("tbody-ban").querySelectorAll("tr").forEach((tr,i) => { tr.cells[0].textContent = i+1; });
+  banCount = $("tbody-ban").querySelectorAll("tr").length;
+}
+
+// ── BẢNG DÊ TRẢ ─────────────────────────────────────────
+window.addDeRow = function(data={}) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="inv-input de-loai" type="text" value="${data.gold_type_name||""}" placeholder="VD: Vàng 18K cũ..."/></td>
+    <td><input class="inv-input num de-gross" type="number" step="0.001" value="${data.gross_weight||""}" placeholder="chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num de-stone" type="number" step="0.001" value="${data.stone_weight||""}" placeholder="chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num de-vang" readonly tabindex="-1"/></td>
+    <td><input class="inv-input num de-conv" value="${data.conversion_text||"99/99"}" placeholder="97.5/99" oninput="calcAll()"/></td>
+    <td><input class="inv-input num de-quydoi" readonly tabindex="-1" style="color:#1a56db"/></td>
+    <td class="no-print"><button class="del-btn" onclick="this.closest('tr').remove(); calcAll();">×</button></td>
+  `;
+  $("tbody-de").appendChild(tr);
+};
+
+// ── TÍNH TOÁN ────────────────────────────────────────────
+window.calcAll = function() {
+  const giaVang = parseFloat($("gia-vang").value) || 0;
+
+  // Bảng bán ra
+  let brSL=0, brAll=0, brHot=0, brVang=0, brConv=0, brCong=0;
+  $("tbody-ban").querySelectorAll("tr").forEach(tr => {
+    const sl    = parseFloat(tr.querySelector(".br-sl")?.value)    || 0;
+    const gross = parseFloat(tr.querySelector(".br-gross")?.value) || 0;
+    const stone = parseFloat(tr.querySelector(".br-stone")?.value) || 0;
+    const tuoi  = parseFloat(tr.querySelector(".br-tuoi")?.value)  || 99;
+    const cong  = parseFloat(tr.querySelector(".br-cong")?.value)  || 0;
+
+    const unit_net  = Math.max(0, gross - stone);
+    const unit_conv = unit_net * (tuoi / 99);
+    const row_vang  = unit_net * sl;
+    const row_conv  = unit_conv * sl;
+    const row_cong  = cong * sl; // công = giá cố định/món × SL (theo loại món, không theo chỉ)
+
+    if (gross > 0 || cong > 0) {
+      brSL   += sl;
+      brAll  += gross * sl;
+      brHot  += stone * sl;
+      brVang += row_vang;
+      brConv += row_conv;
+      brCong += row_cong;
+    }
+    tr.querySelector(".br-vang").value  = gross > 0 ? fmtG(row_vang) : "";
+    tr.querySelector(".br-quydoi").value = gross > 0 ? fmtG3(row_conv) : "";
+  });
+
+  $("br-tong-sl").textContent    = brSL + " món";
+  $("br-tong-all").textContent   = fmtG(brAll) + " chỉ";
+  $("br-tong-hot").textContent   = fmtG(brHot) + " chỉ";
+  $("br-tong-vang").textContent  = fmtG(brVang) + " chỉ";
+  $("br-tong-quydoi").textContent= fmtG3(brConv) + " chỉ";
+  $("br-tong-cong").textContent  = fmt(brCong) + " đ";
+
+  // Bảng dê trả
+  let deAll=0, deHot=0, deVang=0, deConv=0;
+  $("tbody-de").querySelectorAll("tr").forEach(tr => {
+    const gross = parseFloat(tr.querySelector(".de-gross")?.value) || 0;
+    const stone = parseFloat(tr.querySelector(".de-stone")?.value) || 0;
+    const net   = Math.max(0, gross - stone);
+    const convText = tr.querySelector(".de-conv")?.value || "99/99";
+    let ratio = 1;
+    if (convText.includes("/")) {
+      const [tu, mau] = convText.split("/").map(Number);
+      if (mau > 0) ratio = tu / mau;
+    } else {
+      ratio = (parseFloat(convText) || 99) / 99;
+    }
+    const conv = net * ratio;
+    if (gross > 0) {
+      deAll  += gross; deHot += stone;
+      deVang += net;   deConv += conv;
+    }
+    tr.querySelector(".de-vang").value   = gross > 0 ? fmtG(net) : "";
+    tr.querySelector(".de-quydoi").value = gross > 0 ? fmtG3(conv) : "";
+  });
+
+  $("de-tong-all").textContent    = fmtG(deAll) + " chỉ";
+  $("de-tong-hot").textContent    = fmtG(deHot) + " chỉ";
+  $("de-tong-vang").textContent   = fmtG(deVang) + " chỉ";
+  $("de-tong-quydoi").textContent = fmtG3(deConv) + " chỉ";
+
+  // Thống kê vàng
+  $("sum-vang-giao").value = fmtG3(brConv) + " chỉ";
+  $("sum-de-tra").value    = fmtG3(deConv) + " chỉ";
+
+  const noCuVang    = valF("sum-no-cu-vang");
+  const vangChuyen  = valF("sum-vang-chuyen");
+  const khTraVang   = valF("sum-kh-tra-vang");
+  // TL quy tiền của hoá đơn này = vàng giao mới - dê khách trả (tự động, không nhập tay)
+  const subTlVang   = brConv - deConv;
+  $("sub-tl-vang").value = fmtG3(subTlVang);
+
+  const conLai    = (brConv + noCuVang) - (deConv + vangChuyen);
+  const khachNoV  = conLai - khTraVang - subTlVang;
+
+  $("sum-con-lai-vang").value  = fmtG3(conLai)   + " chỉ";
+  $("sum-khach-no-vang").value = fmtG3(khachNoV) + " chỉ";
+
+  // Quy tiền
+  const tienVang = subTlVang * giaVang;
+  $("sub-tl-vang-show").value = fmtG3(subTlVang) + " chỉ";
+  $("sub-don-gia").value      = fmt(giaVang) + " đ";
+  $("sub-thanh-tien").value   = fmt(tienVang) + " đ";
+
+  // Thống kê tiền
+  const ck           = valF("sum-chiet-khau");
+  const noCuTien     = valF("sum-no-cu-tien");
+  const congTraKh    = valF("sum-cong-tra-kh");
+  const giamToa      = valF("sum-giam-toa");
+  const khThanhToan  = valF("sum-kh-thanh-toan");
+
+  const congSauCK = brCong * (1 - ck / 100);
+  const tongTien  = congSauCK + noCuTien + tienVang - congTraKh - giamToa;
+  const khachNoT  = tongTien - khThanhToan;
+
+  $("sum-tien-cong").value   = fmt(brCong)    + " đ";
+  $("sum-tien-vang").value   = fmt(tienVang)  + " đ";
+  $("sum-tong-tien").value   = fmt(tongTien)  + " đ";
+  $("sum-khach-no-tien").value = fmt(khachNoT) + " đ";
+};
+
+// ── LƯU VÀO API ─────────────────────────────────────────
+window.saveInvoice = async function() {
+  if (invoiceId) { window.print(); return; } // Nếu đang xem lại thì in luôn
+
+  const sdt = $("dien-thoai").value.trim();
+  if (!sdt) {
+    alert("⚠️ Vui lòng nhập số điện thoại khách hàng!");
+    $("dien-thoai").focus();
+    return;
+  }
+
+  const btn = $("btn-save");
+  btn.disabled = true; btn.textContent = "⏳ Đang lưu...";
+
+  // Thu thập hàng bán
+  const items = [];
+  $("tbody-ban").querySelectorAll("tr").forEach(tr => {
+    const gross = parseFloat(tr.querySelector(".br-gross")?.value) || 0;
+    const cong  = parseFloat(tr.querySelector(".br-cong")?.value)  || 0;
+    if (gross > 0 || cong > 0) {
+      items.push({
+        product_name:       tr.querySelector(".br-ten")?.value   || "Sản phẩm",
+        quantity:           parseInt(tr.querySelector(".br-sl")?.value) || 1,
+        unit_gross_weight:  gross,
+        unit_stone_weight:  parseFloat(tr.querySelector(".br-stone")?.value) || 0,
+        gold_purity:        parseFloat(tr.querySelector(".br-tuoi")?.value) || 99,
+        unit_making_fee:    cong,
+      });
+    }
+  });
+
+  // Thu thập dê trả
+  const returns = [];
+  $("tbody-de").querySelectorAll("tr").forEach(tr => {
+    const gross = parseFloat(tr.querySelector(".de-gross")?.value) || 0;
+    if (gross > 0) {
+      returns.push({
+        gold_type_name:   tr.querySelector(".de-loai")?.value || "Vàng cũ",
+        gross_weight:     gross,
+        stone_weight:     parseFloat(tr.querySelector(".de-stone")?.value) || 0,
+        conversion_text:  tr.querySelector(".de-conv")?.value || "99/99",
+      });
+    }
+  });
+
+  if (!items.length) {
+    alert("Cần ít nhất 1 hàng bán ra!");
+    btn.disabled = false; btn.textContent = "💾 Lưu & In";
+    return;
+  }
+
+  const payload = {
+    customer_name:    $("khach-hang").value.trim() || null,
+    customer_phone:   sdt,
+    customer_address: $("dia-chi").value.trim() || null,
+    customer_tax_code: $("khach-mst").value.trim() || null,
+    customer_company:  $("khach-cty").value.trim() || null,
+    gold_price_per_chi: parseInt($("gia-vang").value) || 0,
+    gold_prev_debt:   valF("sum-no-cu-vang"),
+    gold_transferred: valF("sum-vang-chuyen"),
+    gold_to_money:    valF("sub-tl-vang"),
+    gold_customer_paid: valF("sum-kh-tra-vang"),
+    discount_percent: valF("sum-chiet-khau"),
+    money_prev_debt:  valF("sum-no-cu-tien"),
+    making_fee_paid_back: valF("sum-cong-tra-kh"),
+    invoice_discount: valF("sum-giam-toa"),
+    customer_paid_money: valF("sum-kh-thanh-toan"),
+    items, returns,
+  };
+
+  try {
+    const res = await fetch("/api/gold/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi lưu hoá đơn");
+
+    $("invoice-number-display").textContent = "Số HĐ: " + data.invoice_number;
+    $("save-status").textContent = "✅ Đã lưu " + data.invoice_number;
+    btn.textContent = "🖨️ In lại";
+    btn.disabled = false;
+    currentInvoiceId = data.invoice_id;
+    $("btn-einvoice").disabled = false;
+    // Cập nhật URL không reload
+    history.replaceState({}, "", "/gold-invoice.html?id=" + data.invoice_id);
+    setTimeout(() => window.print(), 300);
+  } catch (err) {
+    alert("Lỗi: " + err.message);
+    btn.disabled = false; btn.textContent = "💾 Lưu & In";
+  }
+};
+
+// ── XUẤT HOÁ ĐƠN ĐIỆN TỬ (VAT) ────────────────────────────
+window.issueEInvoice = async function() {
+  if (!currentInvoiceId) {
+    alert("Cần Lưu hoá đơn trước khi xuất VAT.");
+    return;
+  }
+  const btn = $("btn-einvoice");
+  btn.disabled = true; btn.textContent = "⏳ Đang xuất...";
+  $("einvoice-status").textContent = "";
+
+  try {
+    const res = await fetch(`/api/gold/invoices/${currentInvoiceId}/einvoice`, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + getToken() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi xuất hoá đơn VAT");
+
+    $("einvoice-status").innerHTML =
+      `✅ VAT số ${data.einvoice_number}` +
+      (data.einvoice_pdf_url ? ` — <a href="${data.einvoice_pdf_url}" target="_blank" class="text-white text-decoration-underline">Xem PDF</a>` : "");
+    btn.textContent = "🧾 Đã xuất VAT";
+  } catch (err) {
+    $("einvoice-status").textContent = "❌ " + err.message;
+    btn.disabled = false;
+    btn.textContent = "🧾 Xuất hoá đơn VAT";
+  }
+};
+
+// ── LOAD HĐ CŨ ──────────────────────────────────────────
+async function loadInvoice(id) {
+  try {
+    const res = await fetch("/api/gold/invoices/" + id, {
+      headers: { Authorization: "Bearer " + getToken() }
+    });
+    if (!res.ok) throw new Error("Không tìm thấy hoá đơn");
+    const { invoice, items, returns } = await res.json();
+
+    $("invoice-number-display").textContent = "Số HĐ: " + invoice.invoice_number;
+    $("khach-hang").value  = invoice.customer_name    || "";
+    $("dien-thoai").value  = invoice.customer_phone   || "";
+    $("dia-chi").value     = invoice.customer_address || "";
+    $("khach-mst").value   = invoice.customer_tax_code || "";
+    $("khach-cty").value   = invoice.customer_company  || "";
+    $("gia-vang").value    = invoice.gold_price_per_chi || 0;
+
+    currentInvoiceId = id;
+    $("btn-einvoice").disabled = false;
+    if (invoice.einvoice_status === "issued") {
+      $("btn-einvoice").textContent = "🧾 Đã xuất VAT";
+      $("einvoice-status").innerHTML =
+        `✅ VAT số ${invoice.einvoice_number}` +
+        (invoice.einvoice_pdf_url ? ` — <a href="${invoice.einvoice_pdf_url}" target="_blank" class="text-white text-decoration-underline">Xem PDF</a>` : "");
+    } else if (invoice.einvoice_status === "error") {
+      $("einvoice-status").textContent = "❌ " + (invoice.einvoice_error || "Lỗi xuất VAT lần trước");
+    }
+    // Điền ngày từ invoice_date
+    const d = new Date(invoice.invoice_date);
+    $("ngay-toa").value =
+      `${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}/${d.getFullYear()}`;
+
+    // Các field thống kê
+    $("sum-no-cu-vang").value  = invoice.gold_prev_debt;
+    $("sum-vang-chuyen").value = invoice.gold_transferred;
+    $("sum-kh-tra-vang").value = invoice.gold_customer_paid;
+    $("sum-chiet-khau").value  = invoice.discount_percent;
+    $("sum-no-cu-tien").value  = invoice.money_prev_debt;
+    $("sum-cong-tra-kh").value = invoice.making_fee_paid_back;
+    $("sum-giam-toa").value    = invoice.invoice_discount;
+    $("sum-kh-thanh-toan").value = invoice.customer_paid_money;
+
+    // Hàng bán
+    items.forEach(item => addBanRow(item));
+    // Dê trả
+    returns.forEach(r => addDeRow(r));
+
+    calcAll();
+    $("btn-save").textContent = "🖨️ In hoá đơn";
+  } catch (err) {
+    alert("Lỗi tải hoá đơn: " + err.message);
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Báo cáo — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .stat-card { transition: box-shadow .2s; }
+    .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+    .stat-num  { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .stat-sub  { font-size: .78rem; color: #64748b; margin-top: 4px; }
+    .trend-up   { color: #16a34a; }
+    .trend-down { color: #dc2626; }
+    .trend-eq   { color: #64748b; }
+    .chart-wrap { position: relative; height: 240px; }
+    .table-report th { background: #f8fafc; font-size: .82rem; white-space: nowrap; }
+    .table-report td { font-size: .85rem; }
+    .badge-type { font-size: .7rem; }
+    .export-btn { font-size: .78rem; }
+    .filter-bar { background: #f8fafc; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+    .tab-content-custom { padding-top: 20px; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <!-- Sidebar -->
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">📈 Báo cáo</h2></div>
+          <div class="col-auto d-flex gap-2 align-items-center">
+            <!-- Date range picker -->
+            <input id="date-from" type="date" class="form-control form-control-sm" style="width:140px"/>
+            <span class="text-muted">→</span>
+            <input id="date-to" type="date" class="form-control form-control-sm" style="width:140px"/>
+            <select id="quick-range" class="form-select form-select-sm" style="width:130px" onchange="applyQuickRange(this.value)">
+              <option value="">Chọn nhanh</option>
+              <option value="today">Hôm nay</option>
+              <option value="yesterday">Hôm qua</option>
+              <option value="7">7 ngày qua</option>
+              <option value="30" selected>30 ngày qua</option>
+              <option value="month">Tháng này</option>
+              <option value="lastmonth">Tháng trước</option>
+              <option value="year">Năm nay</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="loadAll()">🔍 Xem</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-0" id="report-tabs">
+          <li class="nav-item"><a class="nav-link active" href="#tab-revenue" data-bs-toggle="tab">💰 Doanh thu</a></li>
+          <li class="nav-item"><a class="nav-link"        href="#tab-stock"   data-bs-toggle="tab">📦 Tồn kho</a></li>
+          <li class="nav-item"><a class="nav-link"        href="#tab-gold"    data-bs-toggle="tab">🥇 Module Vàng</a></li>
+        </ul>
+
+        <div class="tab-content tab-content-custom">
+
+          <!-- ══ TAB DOANH THU ══════════════════════════════ -->
+          <div class="tab-pane fade show active" id="tab-revenue">
+
+            <!-- Stat cards -->
+            <div class="row row-cards g-3 mb-4" id="revenue-cards">
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Doanh thu</div>
+                <div class="stat-num text-green" id="s-revenue">—</div>
+                <div class="stat-sub" id="s-revenue-trend"></div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Số đơn hoàn thành</div>
+                <div class="stat-num text-blue" id="s-orders">—</div>
+                <div class="stat-sub" id="s-orders-trend"></div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Trung bình / đơn</div>
+                <div class="stat-num" id="s-avg">—</div>
+                <div class="stat-sub" id="s-pending">— đơn đang chờ</div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Đơn bị huỷ</div>
+                <div class="stat-num text-danger" id="s-cancelled">—</div>
+                <div class="stat-sub" id="s-pending-revenue"></div>
+              </div></div></div>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <!-- Biểu đồ doanh thu theo ngày -->
+              <div class="col-lg-8">
+                <div class="card h-100">
+                  <div class="card-header">
+                    <h3 class="card-title">Doanh thu theo ngày</h3>
+                    <div class="card-options">
+                      <button class="btn btn-sm btn-ghost-secondary export-btn" onclick="exportRevenueCSV()">⬇ CSV</button>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Theo kênh + thanh toán -->
+              <div class="col-lg-4">
+                <div class="card mb-3">
+                  <div class="card-header"><h3 class="card-title">Theo kênh bán</h3></div>
+                  <div class="card-body p-0">
+                    <div class="chart-wrap" style="height:140px;padding:12px"><canvas id="chart-channel"></canvas></div>
+                    <div id="channel-legend" class="px-3 pb-2"></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-header"><h3 class="card-title">Phương thức TT</h3></div>
+                  <div class="table-responsive">
+                    <table class="table card-table table-sm">
+                      <thead><tr><th>Phương thức</th><th class="text-end">Tổng</th></tr></thead>
+                      <tbody id="payment-method-rows"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top sản phẩm -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🏆 Top 10 sản phẩm bán chạy</h3>
+                <div class="card-options">
+                  <button class="btn btn-sm btn-ghost-secondary export-btn" onclick="exportTopCSV()">⬇ CSV</button>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter table-report">
+                  <thead><tr><th>#</th><th>Sản phẩm</th><th>SKU</th><th>Ngành</th><th class="text-center">SL bán</th><th class="text-end">Doanh thu</th><th style="width:120px">% DT</th></tr></thead>
+                  <tbody id="top-products-rows"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div><!-- /tab-revenue -->
+
+          <!-- ══ TAB TỒN KHO ════════════════════════════════ -->
+          <div class="tab-pane fade" id="tab-stock">
+
+            <!-- Stat cards -->
+            <div class="row row-cards g-3 mb-4">
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Tổng SKU</div>
+                <div class="stat-num text-blue" id="ss-skus">—</div>
+                <div class="stat-sub">mã hàng đang quản lý</div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Tổng tồn kho</div>
+                <div class="stat-num" id="ss-units">—</div>
+                <div class="stat-sub">đơn vị</div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Giá trị kho (vốn)</div>
+                <div class="stat-num text-green" id="ss-value">—</div>
+                <div class="stat-sub">theo giá vốn gần nhất</div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Cảnh báo tồn thấp</div>
+                <div class="stat-num text-danger" id="ss-low">—</div>
+                <div class="stat-sub" id="ss-zero">— hết hàng</div>
+              </div></div></div>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <!-- Phân bổ theo ngành -->
+              <div class="col-lg-4">
+                <div class="card h-100">
+                  <div class="card-header"><h3 class="card-title">Phân bổ theo ngành</h3></div>
+                  <div class="card-body">
+                    <div class="chart-wrap" style="height:200px"><canvas id="chart-stock-type"></canvas></div>
+                  </div>
+                </div>
+              </div>
+              <!-- Sản phẩm tồn lâu -->
+              <div class="col-lg-8">
+                <div class="card h-100">
+                  <div class="card-header"><h3 class="card-title">⏳ Tồn kho lâu không bán</h3></div>
+                  <div class="table-responsive">
+                    <table class="table card-table table-sm table-report">
+                      <thead><tr><th>Sản phẩm</th><th>SKU</th><th class="text-center">Tồn</th><th class="text-end">Giá bán</th><th class="text-end">Giá trị tồn</th></tr></thead>
+                      <tbody id="nosale-rows"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bảng tồn kho đầy đủ -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">📦 Tồn kho chi tiết</h3>
+                <div class="card-options d-flex gap-2">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-outline-secondary active" onclick="loadStock('all');this.closest('.btn-group').querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Tất cả</button>
+                    <button class="btn btn-outline-danger"           onclick="loadStock('low');this.closest('.btn-group').querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Tồn thấp</button>
+                    <button class="btn btn-outline-danger"           onclick="loadStock('zero');this.closest('.btn-group').querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Hết hàng</button>
+                  </div>
+                  <button class="btn btn-sm btn-ghost-secondary export-btn" onclick="exportStockCSV()">⬇ CSV</button>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter table-report">
+                  <thead><tr>
+                    <th>Sản phẩm</th><th>SKU</th><th>Ngành</th>
+                    <th class="text-center">Tồn kho</th>
+                    <th class="text-end">Giá vốn</th>
+                    <th class="text-end">Giá bán</th>
+                    <th class="text-end">Giá trị tồn</th>
+                    <th class="text-center">Đã bán</th>
+                  </tr></thead>
+                  <tbody id="stock-rows"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div><!-- /tab-stock -->
+
+          <!-- ══ TAB VÀNG ═══════════════════════════════════ -->
+          <div class="tab-pane fade" id="tab-gold">
+
+            <div class="row row-cards g-3 mb-4">
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Hoá đơn vàng</div>
+                <div class="stat-num text-blue" id="gs-invoices">—</div>
+                <div class="stat-sub">đã hoàn thành</div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Vàng đã giao (quy 99)</div>
+                <div class="stat-num text-yellow" id="gs-gold">—</div>
+                <div class="stat-sub" id="gs-returned"></div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Tổng tiền công</div>
+                <div class="stat-num text-green" id="gs-fee">—</div>
+                <div class="stat-sub" id="gs-collected"></div>
+              </div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+                <div class="text-muted small">Khách còn nợ</div>
+                <div class="stat-num text-danger" id="gs-debt-money">—</div>
+                <div class="stat-sub" id="gs-debt-gold"></div>
+              </div></div></div>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <!-- Biểu đồ vàng theo ngày -->
+              <div class="col-lg-7">
+                <div class="card h-100">
+                  <div class="card-header"><h3 class="card-title">Vàng giao theo ngày (chỉ)</h3></div>
+                  <div class="card-body">
+                    <div class="chart-wrap"><canvas id="chart-gold-daily"></canvas></div>
+                  </div>
+                </div>
+              </div>
+              <!-- Khách nợ vàng -->
+              <div class="col-lg-5">
+                <div class="card h-100">
+                  <div class="card-header"><h3 class="card-title">👤 Khách còn nợ</h3></div>
+                  <div class="table-responsive">
+                    <table class="table card-table table-sm table-report">
+                      <thead><tr><th>Khách</th><th>SĐT</th><th class="text-end">Nợ vàng</th><th class="text-end">Nợ tiền</th></tr></thead>
+                      <tbody id="gold-debtors-rows"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /tab-gold -->
+
+        </div><!-- /tab-content -->
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+
+requireLogin();
+  initSidebar();
+// ── UTILS ─────────────────────────────────────────────
+const fmtVND   = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0)) + " đ";
+const fmtGold  = n => Number(n || 0).toFixed(3) + " chỉ";
+const fmtNum   = n => new Intl.NumberFormat("vi-VN").format(n || 0);
+const typeLabel= t => ({ gold:"Vàng 🥇", silver:"Bạc 🥈", fashion:"Thời trang", phone:"Điện thoại", food:"Thực phẩm", hotel:"Khách sạn", service:"Dịch vụ" })[t] || "Chung";
+const payLabel = m => ({ cash:"💵 Tiền mặt", card:"💳 Thẻ", transfer:"🏦 Chuyển khoản", installment:"📅 Trả góp" })[m] || m;
+
+const COLORS = ["#3b82f6","#22c55e","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316","#06b6d4"];
+
+// ── DATE RANGE ────────────────────────────────────────
+function toDateStr(offsetDays = 0, base) {
+  const d = base ? new Date(base) : new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+function initDates() {
+  document.getElementById("date-from").value = toDateStr(-29);
+  document.getElementById("date-to").value   = toDateStr(0);
+  document.getElementById("quick-range").value = "30";
+}
+window.applyQuickRange = function(v) {
+  const today = new Date();
+  let from, to = toDateStr(0);
+  if (v === "today")     { from = toDateStr(0); }
+  else if (v === "yesterday") { from = to = toDateStr(-1); }
+  else if (v === "7")    { from = toDateStr(-6); }
+  else if (v === "30")   { from = toDateStr(-29); }
+  else if (v === "month"){
+    from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+  } else if (v === "lastmonth") {
+    const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    from = lm.toISOString().slice(0,10);
+    to   = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().slice(0,10);
+  } else if (v === "year") {
+    from = `${today.getFullYear()}-01-01`;
+  }
+  if (!from) return;
+  document.getElementById("date-from").value = from;
+  document.getElementById("date-to").value   = to;
+};
+initDates();
+
+// ── CHARTS ───────────────────────────────────────────
+let charts = {};
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function lineChart(id, labels, datasets) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type: "line",
+    data: { labels, datasets: datasets.map((d, i) => ({
+      label: d.label, data: d.data,
+      borderColor: COLORS[i], backgroundColor: COLORS[i] + "22",
+      tension: 0.3, fill: true, pointRadius: 3,
+    }))},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: datasets.length > 1 } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+"M" : v >= 1e3 ? (v/1e3).toFixed(0)+"K" : v } },
+        x: { ticks: { maxTicksLimit: 10 } }
+      }
+    }
+  });
+}
+
+function doughnutChart(id, labels, data) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type: "doughnut",
+    data: { labels, datasets: [{ data, backgroundColor: COLORS.slice(0, labels.length), borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } } }
+    }
+  });
+}
+
+// ── LOAD REVENUE ─────────────────────────────────────
+let revenueData = null;
+
+async function loadRevenue() {
+  const from = document.getElementById("date-from").value;
+  const to   = document.getElementById("date-to").value;
+  const data = await api.get(`/api/reports/revenue?from=${from}&to=${to}`);
+  revenueData = data;
+
+  const { summary, daily, topProducts, byChannel, byPayment, prevPeriod } = data;
+  const rev     = parseInt(summary.total_revenue || 0);
+  const prevRev = parseInt(prevPeriod.revenue    || 0);
+  const revDiff = prevRev > 0 ? ((rev - prevRev) / prevRev * 100).toFixed(1) : null;
+  const ordDiff = parseInt(prevPeriod.orders || 0);
+
+  // Cards
+  document.getElementById("s-revenue").textContent = fmtVND(rev);
+  document.getElementById("s-revenue-trend").innerHTML = revDiff !== null
+    ? `<span class="${revDiff >= 0 ? "trend-up" : "trend-down"}">${revDiff >= 0 ? "▲" : "▼"} ${Math.abs(revDiff)}%</span> so kỳ trước`
+    : "Không có kỳ trước";
+  document.getElementById("s-orders").textContent = fmtNum(summary.completed_orders);
+  document.getElementById("s-orders-trend").textContent = `Kỳ trước: ${fmtNum(ordDiff)} đơn`;
+  document.getElementById("s-avg").textContent = fmtVND(summary.avg_order_value);
+  document.getElementById("s-pending").textContent = `${fmtNum(summary.pending_orders)} đơn đang chờ`;
+  document.getElementById("s-cancelled").textContent = fmtNum(summary.cancelled_orders);
+  document.getElementById("s-pending-revenue").textContent = `Nợ thu: ${fmtVND(summary.pending_revenue)}`;
+
+  // Daily chart
+  lineChart("chart-daily",
+    daily.map(d => d.date.slice(5)), // MM-DD
+    [{ label: "Doanh thu (đ)", data: daily.map(d => parseInt(d.revenue || 0)) }]
+  );
+
+  // Channel chart
+  if (byChannel.length) {
+    doughnutChart("chart-channel",
+      byChannel.map(c => c.channel_name),
+      byChannel.map(c => parseInt(c.revenue || 0))
+    );
+    document.getElementById("channel-legend").innerHTML = byChannel.map((c, i) =>
+      `<div class="d-flex justify-content-between small mb-1">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${COLORS[i]};margin-right:5px;"></span>${c.channel_name}</span>
+        <span class="fw-bold">${fmtVND(c.revenue)}</span>
+      </div>`
+    ).join("");
+  }
+
+  // Payment methods
+  document.getElementById("payment-method-rows").innerHTML = byPayment.map(p =>
+    `<tr><td>${payLabel(p.method)}</td><td class="text-end fw-bold">${fmtVND(p.total)}</td></tr>`
+  ).join("") || `<tr><td colspan="2" class="text-muted text-center">Không có dữ liệu</td></tr>`;
+
+  // Top products
+  const maxRev = topProducts[0]?.revenue || 1;
+  document.getElementById("top-products-rows").innerHTML = topProducts.map((p, i) => {
+    const pct = ((parseInt(p.revenue || 0) / parseInt(maxRev)) * 100).toFixed(0);
+    return `<tr>
+      <td class="text-muted">${i+1}</td>
+      <td class="fw-medium">${p.product_name}</td>
+      <td class="text-muted">${p.sku}</td>
+      <td><span class="badge badge-type bg-blue-lt">${typeLabel(p.product_type)}</span></td>
+      <td class="text-center">${fmtNum(p.qty_sold)}</td>
+      <td class="text-end fw-bold">${fmtVND(p.revenue)}</td>
+      <td>
+        <div class="d-flex align-items-center gap-2">
+          <div class="progress progress-sm flex-fill" style="height:6px">
+            <div class="progress-bar bg-primary" style="width:${pct}%"></div>
+          </div>
+          <span class="text-muted" style="font-size:.75rem;min-width:28px">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="text-muted text-center py-3">Không có dữ liệu trong kỳ</td></tr>`;
+}
+
+// ── LOAD STOCK ───────────────────────────────────────
+let stockData = null;
+
+window.loadStock = async function(filter = "all") {
+  const data = await api.get(`/api/reports/stock?filter=${filter}`);
+  stockData  = data;
+
+  const { summary, items, byType, noSale, threshold } = data;
+
+  // Cards
+  document.getElementById("ss-skus").textContent   = fmtNum(summary.totalSKUs);
+  document.getElementById("ss-units").textContent  = fmtNum(summary.totalUnits);
+  document.getElementById("ss-value").textContent  = fmtVND(summary.totalValue);
+  document.getElementById("ss-low").textContent    = fmtNum(summary.lowCount);
+  document.getElementById("ss-zero").textContent   = `${fmtNum(summary.zeroCount)} SKU hết hàng`;
+
+  // Pie: by type
+  const typeEntries = Object.entries(byType);
+  if (typeEntries.length) {
+    doughnutChart("chart-stock-type",
+      typeEntries.map(([t]) => typeLabel(t)),
+      typeEntries.map(([,v]) => v.skus)
+    );
+  }
+
+  // No-sale table
+  document.getElementById("nosale-rows").innerHTML = noSale.map(i =>
+    `<tr>
+      <td>${i.product_name}</td>
+      <td class="text-muted">${i.sku}</td>
+      <td class="text-center"><span class="badge bg-orange-lt">${i.qty}</span></td>
+      <td class="text-end">${fmtVND(i.sell_price)}</td>
+      <td class="text-end fw-bold">${fmtVND(i.stock_value)}</td>
+    </tr>`
+  ).join("") || `<tr><td colspan="5" class="text-muted text-center py-2">Không có</td></tr>`;
+
+  // Main stock table
+  document.getElementById("stock-rows").innerHTML = items.map(i =>
+    `<tr class="${i.is_zero ? "table-danger" : i.is_low ? "table-warning" : ""}">
+      <td class="fw-medium">${i.product_name}</td>
+      <td class="text-muted">${i.sku}</td>
+      <td><span class="badge badge-type bg-blue-lt">${typeLabel(i.product_type)}</span></td>
+      <td class="text-center">
+        <span class="badge ${i.is_zero ? "bg-red-lt" : i.is_low ? "bg-orange-lt" : "bg-green-lt"}">${i.qty}</span>
+      </td>
+      <td class="text-end">${i.last_cost ? fmtVND(i.last_cost) : "—"}</td>
+      <td class="text-end">${fmtVND(i.sell_price)}</td>
+      <td class="text-end fw-bold">${fmtVND(i.stock_value)}</td>
+      <td class="text-center text-muted">${fmtNum(i.total_sold)}</td>
+    </tr>`
+  ).join("") || `<tr><td colspan="8" class="text-muted text-center py-3">Không có dữ liệu</td></tr>`;
+};
+
+// ── LOAD GOLD ────────────────────────────────────────
+async function loadGold() {
+  const from = document.getElementById("date-from").value;
+  const to   = document.getElementById("date-to").value;
+  const data = await api.get(`/api/reports/gold?from=${from}&to=${to}`);
+
+  const { summary, goldDebtors, daily } = data;
+  const s = summary;
+
+  document.getElementById("gs-invoices").textContent    = fmtNum(s.completed);
+  document.getElementById("gs-gold").textContent        = fmtGold(s.total_gold_delivered);
+  document.getElementById("gs-returned").textContent    = `Dê trả: ${fmtGold(s.total_gold_returned)}`;
+  document.getElementById("gs-fee").textContent         = fmtVND(s.total_making_fee);
+  document.getElementById("gs-collected").textContent   = `Đã thu: ${fmtVND(s.total_collected)}`;
+  document.getElementById("gs-debt-money").textContent  = fmtVND(s.total_money_debt);
+  document.getElementById("gs-debt-gold").textContent   = `Vàng nợ: ${fmtGold(s.total_gold_debt)}`;
+
+  // Chart
+  lineChart("chart-gold-daily",
+    daily.map(d => d.date?.slice(5) || ""),
+    [{ label: "Vàng giao (chỉ)", data: daily.map(d => parseFloat(d.gold_delivered || 0)) }]
+  );
+
+  // Debtors
+  document.getElementById("gold-debtors-rows").innerHTML = goldDebtors.map(c =>
+    `<tr>
+      <td class="fw-medium">${c.customer_name || "Khách vãng lai"}</td>
+      <td class="text-muted">${c.customer_phone || "—"}</td>
+      <td class="text-end ${parseFloat(c.gold_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtGold(c.gold_debt)}</td>
+      <td class="text-end ${parseInt(c.money_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtVND(c.money_debt)}</td>
+    </tr>`
+  ).join("") || `<tr><td colspan="4" class="text-muted text-center py-3">Không có khách nào còn nợ 🎉</td></tr>`;
+}
+
+// ── EXPORT CSV ───────────────────────────────────────
+function toCSV(headers, rows) {
+  const escape = v => `"${String(v || "").replace(/"/g, '""')}"`;
+  return [headers.map(escape), ...rows.map(r => r.map(escape))].map(r => r.join(",")).join("\n");
+}
+function downloadCSV(filename, csv) {
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement("a"), { href: url, download: filename });
+  a.click(); URL.revokeObjectURL(url);
+}
+
+window.exportRevenueCSV = function() {
+  if (!revenueData) return;
+  const from = document.getElementById("date-from").value;
+  const to   = document.getElementById("date-to").value;
+  const csv  = toCSV(
+    ["Ngày", "Số đơn", "Doanh thu (đ)"],
+    revenueData.daily.map(d => [d.date, d.order_count, d.revenue])
+  );
+  downloadCSV(`doanh-thu-${from}-${to}.csv`, csv);
+};
+
+window.exportTopCSV = function() {
+  if (!revenueData) return;
+  const csv = toCSV(
+    ["Sản phẩm", "SKU", "Ngành", "SL bán", "Doanh thu (đ)"],
+    revenueData.topProducts.map(p => [p.product_name, p.sku, typeLabel(p.product_type), p.qty_sold, p.revenue])
+  );
+  downloadCSV("top-san-pham.csv", csv);
+};
+
+window.exportStockCSV = function() {
+  if (!stockData) return;
+  const from = document.getElementById("date-from").value;
+  const csv  = toCSV(
+    ["Sản phẩm", "SKU", "Ngành", "Tồn kho", "Giá vốn", "Giá bán", "Giá trị tồn (đ)", "Đã bán"],
+    stockData.items.map(i => [i.product_name, i.sku, typeLabel(i.product_type), i.qty, i.last_cost||"", i.sell_price, i.stock_value, i.total_sold])
+  );
+  downloadCSV(`ton-kho-${from}.csv`, csv);
+};
+
+// ── LOAD ALL ─────────────────────────────────────────
+window.loadAll = async function() {
+  // Chạy song song 3 API
+  await Promise.all([
+    loadRevenue().catch(e => console.error("revenue:", e)),
+    loadStock("all").catch(e => console.error("stock:", e)),
+    loadGold().catch(e => console.error("gold:", e)),
+  ]);
+};
+
+// Auto-load khi vào trang
+loadAll();
+
+// Load lại khi đổi tab (để chart resize đúng)
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+  tab.addEventListener("shown.bs.tab", () => {
+    Object.values(charts).forEach(c => c.resize());
+  });
+});
+</script>
+</body>
+</html>

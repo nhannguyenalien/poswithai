@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <title>In tem sản phẩm</title>
+  <style>
+    /* ── LABEL SHEET: 10 tem/trang (2 cột × 5 hàng), mỗi tem 90×50mm ── */
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; background: #fff; }
+
+    /* Toolbar */
+    .toolbar {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #1e293b; color: #fff;
+      padding: 8px 16px; align-items: center; gap: 8px;
+    }
+    .toolbar button { padding: 5px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-print { background: #22c55e; color: #fff; }
+    .btn-close  { background: #ef4444; color: #fff; }
+    @media screen {
+      .toolbar { display: flex; }
+      body { background: #e5e7eb; padding-top: 48px; }
+      .page-wrap { max-width: 210mm; margin: 20px auto; background: #fff; padding: 10mm; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
+    }
+    @media print { .toolbar { display: none !important; } .page-wrap { padding: 0; } }
+
+    /* Label grid */
+    .label-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+    }
+
+    /* Single label */
+    .label {
+      width: 90mm; height: 50mm;
+      border: 1px solid #000;
+      padding: 3mm;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+    .label-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .label-name { font-size: 10pt; font-weight: bold; flex: 1; line-height: 1.2; }
+    .label-type { font-size: 8pt; color: #666; white-space: nowrap; padding-left: 4px; }
+
+    .label-meta { font-size: 8pt; color: #444; margin: 2mm 0; }
+    .label-meta span { margin-right: 6px; }
+
+    .label-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+    .label-price { font-size: 14pt; font-weight: bold; }
+    .label-barcode-area { text-align: right; }
+    .label-sku { font-size: 8pt; font-family: monospace; color: #333; }
+    .label-shop { font-size: 8pt; color: #666; text-align: right; }
+
+    /* Gold specific */
+    .label-gold { border: 1.5px solid #d4a017; }
+    .label-gold .label-price { color: #b8860b; }
+    .label-gold-badge { background: #fef3c7; border: 1px solid #d4a017; border-radius: 3px; padding: 1px 5px; font-size: 8pt; font-weight: bold; color: #92400e; }
+
+    /* Silver specific */
+    .label-silver { border: 1.5px solid #6b7280; }
+    .label-silver-badge { background: #f3f4f6; border: 1px solid #9ca3af; border-radius: 3px; padding: 1px 5px; font-size: 8pt; font-weight: bold; color: #374151; }
+
+    /* Barcode SVG */
+    .barcode-svg { max-height: 20mm; max-width: 45mm; }
+
+    /* Copy count badge */
+    .copy-label { font-size: 7pt; color: #999; }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="btn-print" onclick="window.print()">🖨️ In tem</button>
+  <span id="label-size" style="font-size:12px">Chọn kích cỡ:</span>
+  <select id="size-select" onchange="changeSize(this.value)" style="padding:4px 8px; border-radius:4px;">
+    <option value="90x50" selected>90×50mm (chuẩn)</option>
+    <option value="70x40">70×40mm (nhỏ)</option>
+    <option value="50x30">50×30mm (mini)</option>
+  </select>
+  <a href="/print/label-designer.html" target="_blank" class="btn-print" style="background:#3b82f6; text-decoration:none; padding:5px 12px; border-radius:4px; font-weight:bold; color:#fff; font-size:12px;">✏️ Thiết kế</a>
+  <button class="btn-close" onclick="window.close()">✕ Đóng</button>
+  <span id="label-count" style="font-size:12px; margin-left:8px;"></span>
+</div>
+
+<div class="page-wrap">
+  <div class="label-grid" id="label-grid">
+    <div style="padding:20px; color:#999">Đang tải tem...</div>
+  </div>
+</div>
+
+<!-- JsBarcode CDN -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script type="module">
+import { getToken } from "/js/auth.js";
+
+const params     = new URLSearchParams(location.search);
+const variantIds = (params.get("variant_ids") || "").split(",").filter(Boolean);
+const copies     = parseInt(params.get("copies") || "1");
+
+const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0)) + " đ";
+
+async function load() {
+  if (!variantIds.length) {
+    document.getElementById("label-grid").textContent = "Không có variant nào để in";
+    return;
+  }
+
+  // Load settings + template
+  const settingsRes = await fetch("/api/settings", {
+    headers: { Authorization: "Bearer " + getToken() }
+  }).then(r => r.json()).catch(() => ({ settings: {} }));
+  const settings  = settingsRes.settings || {};
+  const shopName  = settings.shop_name  || "Cửa hàng";
+  const shopPhone = settings.shop_phone || "";
+  let template    = null;
+  try { if (settings.label_template) template = JSON.parse(settings.label_template); } catch {}
+
+  // Load stock data
+  const stockRes = await fetch("/api/inventory/stock", {
+    headers: { Authorization: "Bearer " + getToken() }
+  }).then(r => r.json());
+
+  const allVariants = stockRes.items || [];
+  const selected = variantIds.map(id => allVariants.find(v => v.variant_id === id)).filter(Boolean);
+
+  if (!selected.length) {
+    document.getElementById("label-grid").textContent = "Không tìm thấy thông tin sản phẩm";
+    return;
+  }
+
+  const labels = [];
+  for (const v of selected) {
+    for (let c = 0; c < copies; c++) labels.push(v);
+  }
+  document.getElementById("label-count").textContent = `${labels.length} tem`;
+
+  // ── Nếu có template đã thiết kế → dùng template ──────
+  if (template && template.fields && template.fields.length) {
+    const SCALE_PRINT = 3.78; // px/mm at 96dpi
+
+    function getFieldValue(v, f) {
+      const m = {
+        product_name: v.product_name,
+        sku:          v.sku,
+        barcode:      v.barcode || v.sku,
+        price:        new Intl.NumberFormat("vi-VN").format(v.price || 0) + " đ",
+        gold_type:    v.gold_type_name || "",
+        net_weight:   v.gold_net ? v.gold_net + " chỉ" : v.silver_net ? v.silver_net + " g" : "",
+        making_fee:   v.gold_making_fee ? new Intl.NumberFormat("vi-VN").format(v.gold_making_fee) + " đ" : "",
+        shop_name:    settings.shop_name  || "",
+        shop_phone:   settings.shop_phone || "",
+        custom_text:  f.customText || "",
+      };
+      return m[f.type] || "";
+    }
+
+    const grid = document.getElementById("label-grid");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "4mm";
+    grid.innerHTML = labels.map((v, idx) => {
+      const lw = template.lw || 80;
+      const lh = template.lh || 50;
+      const wrap = `
+        <div style="position:relative; width:${lw}mm; height:${lh}mm; border:1px solid #000; background:#fff; overflow:hidden; display:inline-block; flex-shrink:0; page-break-inside:avoid;">
+          ${template.fields.map((f, fi) => {
+            if (f.isDivider) {
+              return `<div style="position:absolute; left:${f.x}mm; top:${f.y}mm; width:${f.w}mm; height:1px; background:#000;"></div>`;
+            }
+            if (f.isBarcode) {
+              return `<div style="position:absolute; left:${f.x}mm; top:${f.y}mm; width:${f.w}mm; height:${f.h}mm;"><svg id="bc-${idx}-${fi}" style="width:100%;height:100%;display:block;"></svg></div>`;
+            }
+            const val = getFieldValue(v, f);
+            if (!val) return "";
+            return `<div style="position:absolute; left:${f.x}mm; top:${f.y}mm; width:${f.w}mm; height:${f.h}mm; overflow:hidden; display:flex; align-items:center; justify-content:${f.align==="center"?"center":f.align==="right"?"flex-end":"flex-start"}; padding:0 1mm; font-size:${f.fs}pt; font-weight:${f.bold?"bold":"normal"}; font-style:${f.italic?"italic":"normal"}; box-sizing:border-box; color:#000; font-family:'Times New Roman',Times,serif;">${val}</div>`;
+          }).join("")}
+        </div>`;
+      return wrap;
+    }).join("");
+
+    // Render barcodes
+    labels.forEach((v, idx) => {
+      template.fields.forEach((f, fi) => {
+        if (!f.isBarcode) return;
+        const bv = v.barcode || v.sku || v.variant_id?.slice(0,12);
+        try { JsBarcode(`#bc-${idx}-${fi}`, bv || "000000", { format:"CODE128", width:1.4, height:f.h*SCALE_PRINT-8, displayValue:f.fs>0, fontSize:8, margin:0 }); } catch {}
+      });
+    });
+
+    setTimeout(() => window.print(), 800);
+    return; // skip default layout
+  }
+
+  const grid = document.getElementById("label-grid");
+  grid.innerHTML = labels.map((v, idx) => {
+    const isGold   = v.product_type === "gold";
+    const isSilver = v.product_type === "silver";
+    const typeLabel = isGold ? "🥇 Vàng" : isSilver ? "🥈 Bạc" : "";
+    const badgeClass = isGold ? "label-gold-badge" : isSilver ? "label-silver-badge" : "";
+    const labelClass = isGold ? "label-gold" : isSilver ? "label-silver" : "";
+
+    const barcodeId = `bc-${idx}`;
+    const barcodeValue = v.barcode || v.sku || v.variant_id.slice(0,12);
+
+    return `
+      <div class="label ${labelClass}">
+        <div class="label-top">
+          <div class="label-name">${v.product_name}</div>
+          ${typeLabel ? `<div class="label-type"><span class="${badgeClass}">${typeLabel}</span></div>` : ""}
+        </div>
+        <div class="label-meta">
+          <span>SKU: <strong>${v.sku}</strong></span>
+          ${v.barcode ? `<span>BC: ${v.barcode}</span>` : ""}
+        </div>
+        <div class="label-bottom">
+          <div>
+            <div class="label-price">${fmtVND(v.price)}</div>
+            <div class="label-shop">${shopName}</div>
+          </div>
+          <div class="label-barcode-area">
+            <svg id="${barcodeId}" class="barcode-svg"></svg>
+            <div class="label-sku">${barcodeValue}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+
+  // Render barcodes
+  labels.forEach((v, idx) => {
+    const barcodeValue = v.barcode || v.sku || v.variant_id.slice(0,12);
+    try {
+      JsBarcode(`#bc-${idx}`, barcodeValue, {
+        format: "CODE128",
+        width: 1.2, height: 30,
+        displayValue: false,
+        margin: 0,
+      });
+    } catch {}
+  });
+
+  setTimeout(() => window.print(), 800);
+}
+
+window.changeSize = function(size) {
+  const [w, h] = size.split("x").map(n => n + "mm");
+  document.querySelectorAll(".label").forEach(el => {
+    el.style.width  = w;
+    el.style.height = h;
+  });
+};
+
+load().catch(err => {
+  document.getElementById("label-grid").textContent = "Lỗi: " + err.message;
+  console.error(err);
+});
+</script>
+</body>
+</html>

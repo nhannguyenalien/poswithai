@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Import dữ liệu — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <style>
+    .drop-zone { border:2px dashed #cbd5e1; border-radius:10px; padding:36px 20px; text-align:center; cursor:pointer; transition:all .2s; background:#f8fafc; }
+    .drop-zone:hover,.drop-zone.over { border-color:#3b82f6; background:#eff6ff; }
+    .drop-zone input[type=file] { display:none; }
+    .step-badge { width:26px;height:26px;border-radius:50%;background:#3b82f6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-right:6px;flex-shrink:0; }
+    .step-row { display:flex;align-items:flex-start;margin-bottom:10px; }
+    .col-row { display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:.83rem; }
+    .col-lbl { min-width:100px;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .col-sel { flex:1;font-size:.82rem;padding:3px 5px;border:1px solid #d1d5db;border-radius:4px; }
+    .preview-table th { font-size:.78rem;background:#f1f5f9;white-space:nowrap; }
+    .preview-table td { font-size:.78rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .res-box { border-radius:8px;padding:16px; }
+    .res-ok   { background:#f0fdf4;border:1px solid #86efac; }
+    .res-err  { background:#fff7ed;border:1px solid #fed7aa; }
+    .res-mix  { background:#eff6ff;border:1px solid #93c5fd; }
+    .err-list { max-height:200px;overflow-y:auto;font-size:.78rem; }
+    .err-row  { padding:3px 0;border-bottom:1px solid #fee2e2; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <h2 class="page-title">📥 Import dữ liệu từ phần mềm khác</h2>
+        <div class="text-muted small">Hỗ trợ CSV và Excel (.xlsx) — tự động nhận diện cột tiếng Việt và tiếng Anh</div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="row g-4">
+
+          <!-- LEFT panel -->
+          <div class="col-md-3">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">Chọn loại dữ liệu</h3></div>
+              <div class="list-group list-group-flush" id="type-list">
+                <a href="#" class="list-group-item list-group-item-action active" onclick="selType('products',this);return false">
+                  <div class="fw-bold">📦 Sản phẩm</div>
+                  <div class="small text-muted">SKU, tên, giá, danh mục, ngành</div>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action" onclick="selType('customers',this);return false">
+                  <div class="fw-bold">👥 Khách hàng</div>
+                  <div class="small text-muted">Họ tên, SĐT, email, địa chỉ</div>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action" onclick="selType('inventory',this);return false">
+                  <div class="fw-bold">🗄️ Tồn kho đầu kỳ</div>
+                  <div class="small text-muted">SKU, số lượng, giá vốn</div>
+                </a>
+              </div>
+            </div>
+            <div class="card mt-3">
+              <div class="card-body small text-muted">
+                <div class="step-row"><span class="step-badge">1</span><span>Download template bên dưới</span></div>
+                <div class="step-row"><span class="step-badge">2</span><span>Điền dữ liệu vào file</span></div>
+                <div class="step-row"><span class="step-badge">3</span><span>Upload file CSV/Excel</span></div>
+                <div class="step-row"><span class="step-badge">4</span><span>Kiểm tra ánh xạ cột</span></div>
+                <div class="step-row"><span class="step-badge">5</span><span>Bấm Import</span></div>
+                <hr class="my-2"/>
+                <div class="text-info">💡 Import 2 lần sẽ cập nhật, không tạo trùng</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT main -->
+          <div class="col-md-9">
+
+            <!-- Template download -->
+            <div class="card mb-3">
+              <div class="card-body d-flex align-items-center gap-3">
+                <div>
+                  <div class="fw-bold" id="tpl-title">📦 Template: Sản phẩm</div>
+                  <div class="text-muted small" id="tpl-desc">sku, name, product_type, category, base_price, barcode</div>
+                </div>
+                <div class="ms-auto d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-secondary" onclick="dlTemplate('csv')">⬇ CSV</button>
+                  <button class="btn btn-sm btn-outline-success"   onclick="dlTemplate('xlsx')">⬇ Excel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Drop zone -->
+            <div class="card mb-3">
+              <div class="card-body">
+                <div class="drop-zone" id="drop-zone" onclick="document.getElementById('finput').click()">
+                  <div style="font-size:2.2rem">📂</div>
+                  <div class="fw-bold mt-1 mb-1">Kéo file vào đây hoặc bấm để chọn</div>
+                  <div class="text-muted small">CSV (.csv) hoặc Excel (.xlsx, .xls) — Tối đa 5MB</div>
+                  <input type="file" id="finput" accept=".csv,.xlsx,.xls" onchange="handleFile(this.files[0])"/>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mapping + Preview -->
+            <div id="map-section" class="d-none">
+              <div class="card mb-3">
+                <div class="card-header">
+                  <h3 class="card-title">🗂 Ánh xạ cột</h3>
+                  <div class="card-options text-muted small" id="file-info"></div>
+                </div>
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <div class="fw-semibold mb-2 small">Cột file → Cột hệ thống</div>
+                      <div id="col-map"></div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="fw-semibold mb-2 small">Chế độ</div>
+                      <select id="imp-mode" class="form-select form-select-sm mb-2">
+                        <option value="upsert">Cập nhật nếu trùng (Upsert)</option>
+                        <option value="insert">Bỏ qua nếu trùng</option>
+                      </select>
+                      <div class="text-muted small">
+                        <b>Upsert:</b> Trùng SKU/SĐT → cập nhật thông tin<br/>
+                        <b>Bỏ qua:</b> Trùng → giữ nguyên dữ liệu cũ
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card mb-3">
+                <div class="card-header">
+                  <h3 class="card-title">👁 Xem trước</h3>
+                  <div class="card-options text-muted small" id="prev-count"></div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table card-table table-sm preview-table" id="prev-table">
+                    <thead id="prev-head"></thead>
+                    <tbody id="prev-body"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-primary btn-lg" id="btn-imp" onclick="doImport()">📥 Bắt đầu Import</button>
+                <button class="btn btn-ghost-secondary" onclick="resetUI()">↺ Chọn file khác</button>
+                <span id="imp-prog" class="text-muted small d-none">⏳ Đang nhập dữ liệu...</span>
+              </div>
+            </div>
+
+            <!-- Result -->
+            <div id="res-section" class="d-none mt-3"></div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+
+requireLogin();
+  initSidebar();
+// ── CONFIG ────────────────────────────────────────────
+const TYPES = {
+  products: {
+    title: "📦 Template: Sản phẩm",
+    desc:  "sku, name, product_type, category, base_price, barcode",
+    headers: ["sku","name","product_type","category","base_price","barcode"],
+    sample: [
+      ["NHAN001","Nhẫn trơn 1 chỉ","gold","Nhẫn vàng","8350000",""],
+      ["DAY001","Dây chuyền 0.5 chỉ","gold","Dây chuyền","4200000","DAY001BC"],
+      ["BAC001","Vòng bạc nữ","silver","Vòng bạc","350000",""],
+      ["THUN001","Áo thun nam M","fashion","Quần áo","250000","AT001-M"],
+    ]
+  },
+  customers: {
+    title: "👥 Template: Khách hàng",
+    desc:  "name, phone, email, address",
+    headers: ["name","phone","email","address"],
+    sample: [
+      ["Nguyễn Văn A","0901234567","a@gmail.com","123 Lê Lợi, Q1, TP.HCM"],
+      ["Trần Thị B","0912345678","","456 Nguyễn Huệ, Q1"],
+      ["Lê Văn C","0923456789","c@yahoo.com",""],
+    ]
+  },
+  inventory: {
+    title: "🗄️ Template: Tồn kho đầu kỳ",
+    desc:  "sku, qty, unit_cost (giá vốn, tùy chọn), note",
+    headers: ["sku","qty","unit_cost","note"],
+    sample: [
+      ["NHAN001","10","8000000","Tồn kho đầu năm 2026"],
+      ["DAY001","5","3800000",""],
+      ["BAC001","20","280000","Nhập từ kho cũ"],
+    ]
+  }
+};
+
+// Column aliases: tên cột trong file → system key
+const ALIASES = {
+  products: {
+    sku:          ["sku","mã sp","mã sản phẩm","mã hàng","product code","code","item code","item no"],
+    name:         ["name","tên","tên sp","tên sản phẩm","tên hàng","product name","item name","description"],
+    product_type: ["product_type","loại","ngành","type","loại ngành","product type","ngành hàng"],
+    category:     ["category","danh mục","nhóm hàng","group","cat","nhóm","loại hàng"],
+    base_price:   ["base_price","price","giá","giá bán","đơn giá","sale price","selling price","retail price","giá niêm yết","giá lẻ"],
+    barcode:      ["barcode","mã vạch","barcode/imei","ean","upc","mã tem"],
+  },
+  customers: {
+    name:    ["name","tên","họ tên","họ và tên","full name","customer name","tên khách","khách hàng"],
+    phone:   ["phone","sdt","điện thoại","mobile","tel","số điện thoại","phone number","di động","số dt"],
+    email:   ["email","e-mail","mail","địa chỉ email"],
+    address: ["address","địa chỉ","dia chi","địa điểm"],
+  },
+  inventory: {
+    sku:       ["sku","mã sp","mã sản phẩm","mã hàng","product code","code"],
+    qty:       ["qty","quantity","tồn kho","số lượng","stock","tồn","sl","số tồn","tồn đầu"],
+    unit_cost: ["unit_cost","giá vốn","giá nhập","cost","unit cost","vốn","nhập giá","giá mua","cost price"],
+    note:      ["note","ghi chú","notes","description","remark"],
+  }
+};
+
+// ── STATE ─────────────────────────────────────────────
+let ctype = "products";
+let rows  = [], heads = [], mapping = {};
+let _errors = [];
+
+// ── SELECT TYPE ───────────────────────────────────────
+window.selType = function(t, el) {
+  ctype = t;
+  document.querySelectorAll("#type-list .list-group-item").forEach(i=>i.classList.remove("active"));
+  el.classList.add("active");
+  const tpl = TYPES[t];
+  document.getElementById("tpl-title").textContent = tpl.title;
+  document.getElementById("tpl-desc").textContent  = tpl.desc;
+  resetUI();
+};
+
+// ── TEMPLATE DOWNLOAD ─────────────────────────────────
+window.dlTemplate = function(fmt) {
+  const tpl = TYPES[ctype];
+  if (fmt==="csv") {
+    const csv = [tpl.headers, ...tpl.sample].map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
+    const a = Object.assign(document.createElement("a"),{
+      href: URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"})),
+      download: `template-${ctype}.csv`
+    });
+    a.click();
+  } else {
+    const ws = XLSX.utils.aoa_to_sheet([tpl.headers,...tpl.sample]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,ctype);
+    XLSX.writeFile(wb,`template-${ctype}.xlsx`);
+  }
+};
+
+// ── FILE HANDLING ─────────────────────────────────────
+const dz = document.getElementById("drop-zone");
+dz.addEventListener("dragover", e=>{e.preventDefault();dz.classList.add("over");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("over"));
+dz.addEventListener("drop", e=>{e.preventDefault();dz.classList.remove("over");if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+
+window.handleFile = async function(file) {
+  if (!file) return;
+  if (file.size > 5*1024*1024) { alert("File quá lớn (tối đa 5MB)"); return; }
+  document.getElementById("file-info").textContent = `${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+
+  const data = await file.arrayBuffer();
+  const wb   = XLSX.read(data, {type:"array",cellText:true,cellDates:false});
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const raw  = XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+
+  if (raw.length < 2) { alert("File cần ít nhất 1 dòng header + 1 dòng dữ liệu"); return; }
+
+  heads = raw[0].map(h=>String(h||"").trim());
+  rows  = raw.slice(1).filter(r=>r.some(c=>String(c||"").trim()!==""));
+
+  // Auto-detect mapping
+  const als = ALIASES[ctype];
+  mapping = {};
+  const used = new Set();
+  heads.forEach(h => {
+    const hl = h.toLowerCase().trim();
+    for (const [key,list] of Object.entries(als)) {
+      if (!used.has(key) && list.some(a=>hl===a||hl.includes(a))) {
+        mapping[h] = key; used.add(key); return;
+      }
+    }
+    mapping[h] = "";
+  });
+
+  renderMapping();
+  renderPreview();
+  document.getElementById("map-section").classList.remove("d-none");
+  document.getElementById("res-section").classList.add("d-none");
+};
+
+function renderMapping() {
+  const keys = Object.keys(ALIASES[ctype]);
+  document.getElementById("col-map").innerHTML = heads.map(h=>`
+    <div class="col-row">
+      <span class="col-lbl" title="${h}">${h.length>13?h.slice(0,12)+"…":h}</span>
+      <span class="text-muted">→</span>
+      <select class="col-sel" data-h="${h}" onchange="mapping['${h}']=this.value">
+        <option value="">(bỏ qua)</option>
+        ${keys.map(k=>`<option value="${k}" ${mapping[h]===k?"selected":""}>${k}</option>`).join("")}
+      </select>
+    </div>`).join("");
+}
+
+function renderPreview() {
+  const prev = rows.slice(0,5);
+  document.getElementById("prev-count").textContent = `${rows.length} dòng`;
+  document.getElementById("prev-head").innerHTML =
+    `<tr>${heads.map(h=>`<th>${h}</th>`).join("")}</tr>`;
+  document.getElementById("prev-body").innerHTML = prev.map((r,i)=>
+    `<tr class="${i%2?"table-light":""}">${heads.map((_,ci)=>`<td title="${r[ci]||""}">${String(r[ci]||"").slice(0,28)}</td>`).join("")}</tr>`
+  ).join("");
+}
+
+// ── DO IMPORT ─────────────────────────────────────────
+window.doImport = async function() {
+  // Convert rows → objects theo mapping
+  const data = rows.map(r=>{
+    const obj={};
+    heads.forEach((h,i)=>{ if(mapping[h]) obj[mapping[h]]=String(r[i]||"").trim(); });
+    return obj;
+  }).filter(o=>Object.values(o).some(v=>v));
+
+  if (!data.length) { alert("Không có dữ liệu hợp lệ sau khi ánh xạ cột"); return; }
+
+  const btn  = document.getElementById("btn-imp");
+  const prog = document.getElementById("imp-prog");
+  btn.disabled=true; btn.textContent="⏳ Đang nhập...";
+  prog.classList.remove("d-none");
+  prog.textContent=`⏳ Đang nhập ${data.length} dòng...`;
+
+  const mode = document.getElementById("imp-mode").value;
+
+  try {
+    let result;
+    if (ctype==="products")  result = await api.post("/api/import/products",  {rows:data,mode});
+    else if (ctype==="customers") result = await api.post("/api/import/customers", {rows:data,mode});
+    else result = await api.post("/api/import/inventory", {rows:data});
+    renderResult(result);
+  } catch(err) {
+    renderResult({total:data.length,success:0,errors:[{row:0,message:err.message}]});
+  } finally {
+    btn.disabled=false; btn.textContent="📥 Bắt đầu Import";
+    prog.classList.add("d-none");
+  }
+};
+
+function renderResult(r) {
+  const sec  = document.getElementById("res-section");
+  const errs = r.errors||[];
+  const ok   = r.success||0;
+  const skip = r.skipped||0;
+  const errN = errs.length;
+  _errors    = errs;
+
+  let cls = "res-ok";
+  if (errN>0&&ok===0) cls="res-err";
+  else if (errN>0) cls="res-mix";
+
+  const goLink = {products:"/products.html",customers:"/customers.html",inventory:"/inventory.html"}[ctype]||"/dashboard.html";
+
+  sec.innerHTML = `
+    <div class="res-box ${cls}">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div style="font-size:2rem">${ok>0&&errN===0?"✅":errN>0&&ok>0?"⚠️":errN>0?"❌":"✅"}</div>
+        <div>
+          <div class="fw-bold fs-5">${ok>0?`${ok.toLocaleString("vi-VN")} dòng nhập thành công`:"Không có dòng nào được nhập"}</div>
+          <div class="text-muted small">Tổng: ${r.total} · Thành công: ${ok} · Bỏ qua: ${skip} · Lỗi: ${errN}</div>
+        </div>
+        ${ok>0?`<a href="${goLink}" class="btn btn-sm btn-success ms-auto">Xem dữ liệu →</a>`:""}
+      </div>
+      ${errN>0?`
+        <div class="fw-semibold mb-2 small">❌ ${errN} dòng lỗi:</div>
+        <div class="err-list">
+          ${errs.map(e=>`<div class="err-row"><span class="text-muted me-2">Dòng ${e.row}</span>${e.sku?`<code class="me-1">${e.sku}</code>`:""}${e.name?`<span class="me-1">${e.name}</span>`:""}<span class="text-danger">${e.message}</span></div>`).join("")}
+        </div>
+        <button class="btn btn-sm btn-outline-secondary mt-2" onclick="dlErrors()">⬇ Export lỗi CSV</button>
+      `:""}
+    </div>`;
+  sec.classList.remove("d-none");
+  sec.scrollIntoView({behavior:"smooth"});
+}
+
+window.dlErrors = function() {
+  const csv = ["Dòng,SKU/Tên,Lỗi",..._errors.map(e=>`${e.row},"${e.sku||e.name||""}","${e.message}"`)].join("\n");
+  const a = Object.assign(document.createElement("a"),{
+    href:URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"})),
+    download:"import-errors.csv"
+  });
+  a.click();
+};
+
+window.resetUI = function() {
+  rows=[]; heads=[]; mapping={};
+  document.getElementById("finput").value="";
+  document.getElementById("file-info").textContent="";
+  document.getElementById("map-section").classList.add("d-none");
+  document.getElementById("res-section").classList.add("d-none");
+};
+</script>
+</body>
+</html>

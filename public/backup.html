@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sao lưu &amp; Khôi phục — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark"></aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <h2 class="page-title">💾 Sao lưu &amp; Khôi phục</h2>
+        <div class="text-muted small">Sao lưu toàn bộ dữ liệu (sản phẩm, khách hàng, đơn hàng, công nợ...) — tải về máy hoặc đẩy lên S3. Khôi phục lại được bất cứ lúc nào từ file đã lưu.</div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-body">
+                <h3 class="card-title">📥 Sao lưu</h3>
+                <p class="text-muted">Xuất toàn bộ dữ liệu hiện tại thành 1 file JSON. Có thể dùng file này để khôi phục lại sau này.</p>
+                <button class="btn btn-primary" onclick="downloadBackup()" id="btn-download">Tải về máy (.json)</button>
+                <button class="btn btn-outline-primary ms-2" onclick="uploadToS3()" id="btn-s3">☁️ Sao lưu lên S3</button>
+                <div id="backup-status" class="mt-3"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-body">
+                <h3 class="card-title">📤 Khôi phục</h3>
+                <p class="text-muted">Chọn 1 file backup (.json) đã tải trước đó để khôi phục lại. Dữ liệu trùng ID sẽ được <strong>cập nhật đè</strong>, dữ liệu mới sẽ được thêm vào — không xoá dữ liệu hiện có ngoài phạm vi file.</p>
+                <input type="file" id="restore-file" accept="application/json,.json" class="form-control mb-2"/>
+                <button class="btn btn-danger" onclick="restoreBackup()" id="btn-restore">Khôi phục từ file này</button>
+                <div id="restore-status" class="mt-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Lưu ý</h3></div>
+          <div class="card-body">
+            <ul class="mb-0">
+              <li>Backup gồm: sản phẩm, kho hàng, khách hàng, công nợ, đơn hàng, thanh toán, hoá đơn vàng, mẫu hàng, danh mục, cài đặt...</li>
+              <li><strong>Không</strong> gồm: tài khoản đăng nhập (users), API token (vì chỉ lưu bản băm, không khôi phục lại dùng được), nhật ký thao tác.</li>
+              <li>Sao lưu lên S3 cần cấu hình sẵn trên server (báo kỹ thuật nếu bấm nút mà báo "chưa cấu hình").</li>
+              <li>Nên tải về định kỳ (VD: cuối mỗi ngày/tuần) và lưu ở nơi an toàn.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin, getToken } from "/js/auth.js";
+import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+
+requireLogin();
+initSidebar();
+
+window.downloadBackup = async function() {
+  const btn = document.getElementById("btn-download");
+  const statusEl = document.getElementById("backup-status");
+  btn.disabled = true; btn.textContent = "⏳ Đang xuất...";
+  statusEl.innerHTML = "";
+  try {
+    const res = await fetch("/api/backup/export", { headers: { Authorization: "Bearer " + getToken() } });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || `Lỗi ${res.status}`);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="(.+)"/);
+    const filename = match ? match[1] : `pos-backup-${new Date().toISOString().slice(0,10)}.json`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.innerHTML = `<span class="text-success">✓ Đã tải về "${filename}"</span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-danger">${err.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Tải về máy (.json)";
+  }
+};
+
+window.uploadToS3 = async function() {
+  const btn = document.getElementById("btn-s3");
+  const statusEl = document.getElementById("backup-status");
+  btn.disabled = true; btn.textContent = "⏳ Đang tải lên S3...";
+  statusEl.innerHTML = "";
+  try {
+    const res = await api.post("/api/backup/s3-upload", {});
+    statusEl.innerHTML = `<span class="text-success">✓ Đã lưu lên S3: <code>${res.key}</code></span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-danger">${err.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "☁️ Sao lưu lên S3";
+  }
+};
+
+window.restoreBackup = async function() {
+  const fileInput = document.getElementById("restore-file");
+  const statusEl = document.getElementById("restore-status");
+  const file = fileInput.files[0];
+  if (!file) return alert("⚠️ Chọn 1 file backup (.json) trước");
+
+  if (!confirm("⚠️ Khôi phục sẽ GHI ĐÈ dữ liệu trùng ID trong hệ thống hiện tại bằng dữ liệu trong file.\n\nChỉ nên làm khi chắc chắn file backup này đúng và cần thiết. Tiếp tục?")) return;
+
+  const btn = document.getElementById("btn-restore");
+  btn.disabled = true; btn.textContent = "⏳ Đang khôi phục...";
+  statusEl.innerHTML = "";
+  try {
+    const text = await file.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { throw new Error("File không phải JSON hợp lệ"); }
+
+    const res = await api.post("/api/backup/import", parsed);
+    const rows = Object.entries(res.summary).map(([table, s]) => `
+      <tr>
+        <td>${table}</td>
+        <td class="text-end">${s.restored}/${s.total}</td>
+        <td class="text-danger small">${s.errors ? s.errors.join("; ") : ""}</td>
+      </tr>`).join("");
+    statusEl.innerHTML = `
+      <div class="text-success mb-2">✓ Khôi phục xong</div>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th>Bảng</th><th class="text-end">Đã khôi phục</th><th>Lỗi</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-danger">${err.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Khôi phục từ file này";
+  }
+};
+</script>
+</body>
+</html>

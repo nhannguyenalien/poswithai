@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Thiết lập tiệm — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+</head>
+<body class="d-flex flex-column">
+<div class="page page-center">
+  <div class="container container-tight py-5">
+
+    <!-- Avatar + tên từ Google -->
+    <div class="text-center mb-4" id="google-info">
+      <div id="avatar-wrap" class="mb-2" style="display:none">
+        <img id="google-avatar" src="" width="64" height="64"
+             style="border-radius:50%; border:3px solid #e9ecef"/>
+      </div>
+      <div class="fw-bold" id="google-name"></div>
+      <div class="text-muted small" id="google-email"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">🏪 Thiết lập thông tin tiệm</h3>
+      </div>
+      <div class="card-body">
+        <div id="msg"></div>
+
+        <div class="mb-3">
+          <label class="form-label required">Tên tiệm</label>
+          <input id="tenant-name" type="text" class="form-control form-control-lg"
+                 placeholder="VD: Tiệm Vàng Thanh Hương"/>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label required">Địa chỉ URL (slug)</label>
+          <div class="input-group">
+            <span class="input-group-text text-muted">pos.app/</span>
+            <input id="tenant-slug" type="text" class="form-control"
+                   placeholder="tiem-vang-thanh-huong"/>
+          </div>
+          <small class="text-muted">Chỉ chữ thường, số và dấu gạch ngang. Không đổi được sau này.</small>
+        </div>
+
+        <button id="btn-setup" class="btn btn-primary btn-lg w-100">
+          Bắt đầu sử dụng →
+        </button>
+      </div>
+    </div>
+
+    <div class="text-center mt-3">
+      <a href="/login.html" class="text-muted small">← Đăng nhập tài khoản khác</a>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { setSession } from "/js/auth.js";
+
+  // Đọc temp token từ URL
+  const params    = new URLSearchParams(window.location.search);
+  const tempToken = params.get("token");
+
+  if (!tempToken) {
+    window.location.href = "/login.html";
+  }
+
+  // Parse payload từ JWT (chỉ đọc, không verify ở client)
+  function parseJwtPayload(token) {
+    try {
+      const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      return JSON.parse(atob(base64));
+    } catch { return {}; }
+  }
+
+  const payload = parseJwtPayload(tempToken);
+
+  // Điền thông tin Google vào UI
+  if (payload.name)   document.getElementById("google-name").textContent  = payload.name;
+  if (payload.email)  document.getElementById("google-email").textContent = payload.email;
+  if (payload.avatar) {
+    const img  = document.getElementById("google-avatar");
+    const wrap = document.getElementById("avatar-wrap");
+    img.src    = payload.avatar;
+    wrap.style.display = "block";
+  }
+
+  // Auto-generate slug từ tên tiệm
+  document.getElementById("tenant-name").addEventListener("input", function() {
+    const slug = this.value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d").replace(/Đ/g, "d")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    document.getElementById("tenant-slug").value = slug;
+  });
+
+  // Submit setup
+  document.getElementById("btn-setup").addEventListener("click", async function() {
+    const btn        = this;
+    const msgEl      = document.getElementById("msg");
+    const tenantName = document.getElementById("tenant-name").value.trim();
+    const tenantSlug = document.getElementById("tenant-slug").value.trim();
+
+    if (!tenantName) {
+      msgEl.innerHTML = `<div class="alert alert-danger mb-3">Vui lòng nhập tên tiệm</div>`;
+      return;
+    }
+    if (!tenantSlug || !/^[a-z0-9-]+$/.test(tenantSlug)) {
+      msgEl.innerHTML = `<div class="alert alert-danger mb-3">Slug không hợp lệ (chỉ chữ thường, số, gạch ngang)</div>`;
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = "Đang tạo...";
+    msgEl.innerHTML = "";
+
+    try {
+      const res = await fetch("/api/setup", {
+        method:  "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": `Bearer ${tempToken}`,
+        },
+        body: JSON.stringify({ tenant_name: tenantName, tenant_slug: tenantSlug }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
+
+      // Lưu full token vào localStorage và vào dashboard
+      setSession(data.token, {
+        name:       payload.name,
+        email:      payload.email,
+        tenantName: tenantName,
+      });
+
+      // Xóa token khỏi URL
+      window.history.replaceState({}, "", "/setup.html");
+      window.location.href = "/dashboard.html";
+
+    } catch (err) {
+      msgEl.innerHTML = `<div class="alert alert-danger mb-3">${err.message}</div>`;
+      btn.disabled    = false;
+      btn.textContent = "Bắt đầu sử dụng →";
+    }
+  });
+</script>
+</body>
+</html>

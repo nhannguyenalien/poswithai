@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <title>Bill cuộn</title>
+  <style>
+    /* ── THERMAL RECEIPT 80mm ── */
+    @page {
+      size: 80mm auto;
+      margin: 2mm 3mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11pt;
+      width: 76mm;
+      color: #000;
+      background: #fff;
+    }
+    .center  { text-align: center; }
+    .right   { text-align: right; }
+    .bold    { font-weight: bold; }
+    .large   { font-size: 14pt; }
+    .small   { font-size: 9pt; }
+    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
+
+    table { width: 100%; border-collapse: collapse; }
+    td    { vertical-align: top; padding: 1px 0; }
+    .col-name  { width: 55%; }
+    .col-qty   { width: 10%; text-align: center; }
+    .col-price { width: 18%; text-align: right; }
+    .col-total { width: 17%; text-align: right; }
+
+    .summary-row td { padding: 2px 0; }
+    .summary-label  { width: 55%; }
+    .summary-value  { width: 45%; text-align: right; font-weight: bold; }
+
+    .total-row td { font-size: 13pt; font-weight: bold; padding: 3px 0; }
+    .debt-row  td { color: #000; font-weight: bold; }
+
+    .footer { margin-top: 8px; font-size: 9pt; text-align: center; }
+    .no-print { display: none; }
+
+    @media screen {
+      body { margin: 20px auto; border: 1px dashed #ccc; padding: 10px; }
+      .no-print {
+        display: block;
+        position: fixed; top: 0; left: 0; right: 0;
+        background: #333; color: #fff;
+        padding: 8px; text-align: center;
+      }
+      .no-print button {
+        background: #e8b84b; border: none; padding: 6px 16px;
+        border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 4px;
+      }
+      .no-print button.green { background: #4caf50; color: #fff; }
+      body { margin-top: 50px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="green" onclick="window.print()">🖨️ In ngay</button>
+  <button onclick="window.close()">✕ Đóng</button>
+  <span id="screen-note" style="font-size:12px; margin-left:12px;"></span>
+</div>
+
+<div id="receipt">
+  <!-- Render bằng JS -->
+  <div class="center bold large" id="shop-name">Đang tải...</div>
+</div>
+
+<script type="module">
+import { getToken } from "/js/auth.js";
+
+const params  = new URLSearchParams(location.search);
+const orderId = params.get("order_id");
+
+async function load() {
+  if (!orderId) { document.getElementById("receipt").textContent = "Thiếu order_id"; return; }
+
+  const [orderRes, settingsRes] = await Promise.all([
+    fetch(`/api/orders/${orderId}`, { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json()),
+    fetch("/api/settings",          { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json()).catch(() => ({ settings: {} })),
+  ]);
+
+  const { order, items, payments, paid_amount, remaining } = orderRes;
+  const settings = settingsRes.settings || {};
+  const shopName  = settings.shop_name  || "CỬA HÀNG";
+  const shopAddr  = settings.shop_address || "";
+  const shopPhone = settings.shop_phone  || "";
+
+  const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0));
+  const now    = new Date();
+  const dateStr= `${now.getDate().toString().padStart(2,"0")}/${(now.getMonth()+1).toString().padStart(2,"0")}/${now.getFullYear()} ${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}`;
+
+  const paidTotal = payments?.reduce((s,p) => s + parseInt(p.amount||0), 0) || paid_amount || 0;
+  const change    = paidTotal - parseInt(order.total || 0);
+  const cashPayment = payments?.find(p => p.method === "cash");
+
+  document.getElementById("receipt").innerHTML = `
+    <div class="center bold large">${shopName}</div>
+    ${shopAddr  ? `<div class="center small">${shopAddr}</div>`  : ""}
+    ${shopPhone ? `<div class="center small">ĐT: ${shopPhone}</div>` : ""}
+    <div class="divider-solid"></div>
+
+    <div class="center bold" style="font-size:13pt;">HOÁ ĐƠN BÁN HÀNG</div>
+    <div class="divider"></div>
+
+    <table>
+      <tr><td>Số HĐ:</td><td class="right bold">${order.order_number}</td></tr>
+      <tr><td>Ngày:</td><td class="right">${dateStr}</td></tr>
+      ${order.customer_name ? `<tr><td>Khách:</td><td class="right">${order.customer_name}</td></tr>` : ""}
+      ${order.customer_phone ? `<tr><td>SĐT:</td><td class="right">${order.customer_phone}</td></tr>` : ""}
+    </table>
+    <div class="divider"></div>
+
+    <table>
+      <thead>
+        <tr class="bold small">
+          <td class="col-name">Sản phẩm</td>
+          <td class="col-qty">SL</td>
+          <td class="col-price">Giá</td>
+          <td class="col-total">T.Tiền</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${(items || []).map(item => `
+          <tr>
+            <td class="col-name">${item.product_name}<br/><span class="small" style="color:#444">${item.sku||""}</span></td>
+            <td class="col-qty">${item.quantity}</td>
+            <td class="col-price">${fmtVND(item.unit_price)}</td>
+            <td class="col-total">${fmtVND(item.total)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <div class="divider"></div>
+
+    <table class="summary-row">
+      <tr><td class="summary-label">Tạm tính:</td><td class="summary-value">${fmtVND(order.subtotal)} đ</td></tr>
+      ${parseInt(order.discount||0) > 0 ? `<tr><td class="summary-label">Giảm giá:</td><td class="summary-value">-${fmtVND(order.discount)} đ</td></tr>` : ""}
+    </table>
+    <div class="divider-solid"></div>
+
+    <table>
+      <tr class="total-row">
+        <td>TỔNG CỘNG:</td>
+        <td class="right">${fmtVND(order.total)} đ</td>
+      </tr>
+    </table>
+    <div class="divider"></div>
+
+    <table class="summary-row">
+      ${(payments||[]).map(p => `
+        <tr>
+          <td class="summary-label">${{cash:"Tiền mặt",card:"Thẻ",transfer:"CK",installment:"Góp"}[p.method]||p.method}:</td>
+          <td class="summary-value">${fmtVND(p.amount)} đ</td>
+        </tr>
+      `).join("")}
+      ${cashPayment && change > 0 ? `
+        <tr><td class="summary-label">Tiền thừa:</td><td class="summary-value">${fmtVND(change)} đ</td></tr>
+      ` : ""}
+      ${(remaining||0) > 0 ? `
+        <tr class="debt-row"><td class="summary-label bold">CÒN NỢ:</td><td class="summary-value">${fmtVND(remaining)} đ</td></tr>
+      ` : ""}
+    </table>
+    <div class="divider-solid"></div>
+
+    <div class="footer">
+      Cảm ơn quý khách!<br/>
+      Hẹn gặp lại 😊
+    </div>
+    <div style="height:20mm"></div>
+  `;
+
+  document.getElementById("screen-note").textContent = `Đơn: ${order.order_number}`;
+  setTimeout(() => window.print(), 500);
+}
+
+load().catch(err => {
+  document.getElementById("receipt").textContent = "Lỗi: " + err.message;
+});
+</script>
+</body>
+</html>

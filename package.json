@@ -1,0 +1,15 @@
+{
+  "name": "pos-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public --compatibility-date=2026-06-01",
+    "deploy": "wrangler pages deploy public"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

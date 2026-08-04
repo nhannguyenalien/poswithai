@@ -1,0 +1,1822 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Bán Sỉ — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .ws-table td, .ws-table th { vertical-align: middle; }
+    .qty-ctrl { display: flex; align-items: center; gap: 4px; }
+    .qty-ctrl input { width: 54px; text-align: center; }
+    .summary-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+    .total-line { font-size: 1.4rem; font-weight: 700; color: #2563eb; }
+    .debt-line  { font-size: 1.1rem; font-weight: 700; color: #dc2626; }
+    /* Ô nhập tuổi/TL/giá/công trên dòng hàng vàng-bạc — input-group có nhãn rõ ràng */
+    .metal-field .input-group-text { font-size: 12px; color: var(--tblr-secondary); min-width: 46px; justify-content: center; }
+    .metal-field input { font-weight: 600; }
+    .metal-badge { font-size: 11px; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <!-- Sidebar -->
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col">
+            <h2 class="page-title" id="page-title">📦 Lập Hoá Đơn Bán Sỉ</h2>
+            <div class="text-muted small" id="page-subtitle">Dành cho đơn số lượng lớn, giá thương lượng, in hoá đơn A4 ký tên</div>
+          </div>
+          <div class="col-auto">
+            <a href="/orders.html" class="btn btn-ghost-secondary btn-sm">← Bán lẻ POS</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="row g-3">
+
+          <!-- Thông tin hoá đơn -->
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">📋 Thông tin hoá đơn</h3></div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-5">
+                    <label class="form-label required">Khách hàng</label>
+                    <div class="d-flex gap-2">
+                      <div class="flex-fill position-relative">
+                        <input id="cust-search" type="text" class="form-control" placeholder="Tên hoặc SĐT..."/>
+                        <div id="cust-ac" class="autocomplete-list d-none"></div>
+                      </div>
+                      <button type="button" id="new-cust-btn" class="btn btn-ghost-primary" onclick="openQuickCustomer()">+ Mới</button>
+                    </div>
+                    <div id="cust-info" class="mt-1 small text-muted"></div>
+                    <div id="cust-debt" class="mt-1 small"></div>
+                    <input type="hidden" id="cust-id"/>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Ngày lập</label>
+                    <input id="inv-date" type="date" class="form-control"/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Chiết khấu (%)</label>
+                    <input id="discount-pct" type="text" inputmode="decimal" class="form-control" value="0" min="0" max="100" step="0.5" oninput="calcTotal()"/>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thêm sản phẩm + Hàng hoá trong đơn -->
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🛒 Hàng hoá trong đơn</h3>
+                <div class="card-options d-flex align-items-center gap-2">
+                  <label class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="quick-mode-toggle" onchange="onQuickModeToggle(this.checked)"/>
+                    <span class="form-check-label small">📝 Hoá đơn nháp</span>
+                  </label>
+                  <span id="item-count" class="badge bg-blue-lt">0 mặt hàng</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="alert alert-info py-2 d-none" id="quick-mode-note">
+                  Hoá đơn nháp: ẩn khỏi danh sách đơn chính thức, không trừ kho — vẫn lưu công nợ khách hàng.
+                </div>
+                <label class="form-label">Thêm sản phẩm vào đơn</label>
+                <div class="position-relative mb-1">
+                  <input id="prod-search" type="text" class="form-control" placeholder="Tìm theo tên hoặc SKU..."/>
+                  <div id="prod-ac" class="autocomplete-list d-none"></div>
+                </div>
+                <div class="text-muted small">Bấm vào sản phẩm để thêm vào đơn. Có thể điều chỉnh giá và số lượng trong bảng. Riêng vàng/bạc sẽ hiện ô nhập trọng lượng/tuổi/giá/công ngay trên dòng.</div>
+              </div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter ws-table">
+                  <thead>
+                    <tr>
+                      <th>Sản phẩm</th>
+                      <th style="width:100px">SL</th>
+                      <th style="width:120px">Đơn giá (đ)</th>
+                      <th style="width:110px" class="text-end">Thành tiền</th>
+                      <th style="width:30px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="ws-items">
+                    <tr id="empty-row"><td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-light">
+                      <td class="small text-muted">
+                        🥇 TL vàng+hột: <b id="ws-total-gross">0.000</b> ·
+                        Hột: <b id="ws-total-stone">0.000</b> ·
+                        TL vàng: <b id="ws-total-net">0.000</b> ·
+                        Quy 99: <b id="ws-total-conv">0.000</b> chỉ
+                      </td>
+                      <td class="text-center fw-bold" id="ws-total-qty">0</td>
+                      <td class="text-end small text-muted">Tổng</td>
+                      <td class="text-end fw-bold" id="ws-total-money">0 đ</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mục tuỳ ý (chỉ hiện khi bật Hoá đơn nháp) — thêm theo dòng kiểu Excel, không cần
+               có trong danh mục sản phẩm; có Tuổi + TL để tự quy đổi ra vàng 99 nếu là hàng vàng. -->
+          <div class="col-12 d-none" id="custom-items-section">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">📝 Mục tuỳ ý (hoá đơn nháp)</h3></div>
+              <div class="table-responsive">
+                <table class="table table-vcenter card-table" id="custom-items-table">
+                  <thead>
+                    <tr>
+                      <th>Tên hàng</th>
+                      <th style="width:70px">SL</th>
+                      <th style="width:100px">TL vàng+hột</th>
+                      <th style="width:90px">TL hột</th>
+                      <th style="width:100px">TL vàng</th>
+                      <th style="width:80px">Tuổi</th>
+                      <th class="text-end" style="width:90px">Quy 99</th>
+                      <th style="width:130px">Công/Đơn giá</th>
+                      <th class="text-end" style="width:120px">Thành tiền</th>
+                      <th style="width:44px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="custom-items-body">
+                    <tr id="custom-items-empty"><td colspan="10" class="text-muted text-center py-3">Chưa có mục tuỳ ý</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-light">
+                      <td class="small text-muted">Tổng</td>
+                      <td class="text-center fw-bold" id="ci-total-qty">0</td>
+                      <td class="text-end small fw-bold" id="ci-total-gross">0.000</td>
+                      <td class="text-end small fw-bold" id="ci-total-stone">0.000</td>
+                      <td class="text-end small fw-bold" id="ci-total-net">0.000</td>
+                      <td></td>
+                      <td class="text-end small fw-bold" id="ci-total-conv">0.000 chỉ</td>
+                      <td></td>
+                      <td class="text-end fw-bold" id="ci-total-money">0 đ</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div class="card-footer">
+                <button class="btn btn-sm btn-ghost-secondary" onclick="addCustomItemRow()">+ Thêm dòng</button>
+                <div class="dropdown d-inline-block">
+                  <button class="btn btn-sm btn-ghost-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" onclick="loadItemPresets('custom')">+ Từ mẫu</button>
+                  <ul class="dropdown-menu" id="custom-preset-menu" style="max-height:260px; overflow-y:auto;">
+                    <li><span class="dropdown-item-text text-muted small">Đang tải...</span></li>
+                  </ul>
+                </div>
+                <div class="text-muted small mt-1">Để trống Tuổi/TL nếu là mục thường (không phải vàng). Nếu nhập cả Tuổi và TL, hệ thống tự quy đổi ra vàng 99 và cộng vào phần "Quy đổi vàng 99" bên dưới — cột "Công/Đơn giá" khi đó chỉ là tiền công. Dòng hay lặp lại có thể bấm 💾 để lưu mẫu, lần sau chọn lại qua "+ Từ mẫu".</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hàng cũ khách trả (thu lại) — chỉ hiện khi tiệm có bật ngành vàng/bạc -->
+          <div class="col-12 d-none" id="tradein-section">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🔄 Hàng cũ khách trả (thu lại)</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-vcenter card-table" id="tradein-items">
+                  <thead>
+                    <tr>
+                      <th>Tên hàng</th>
+                      <th style="width:80px">Tuổi</th>
+                      <th style="width:100px">TL luôn hột</th>
+                      <th style="width:90px">Hột</th>
+                      <th style="width:100px">TL vàng</th>
+                      <th class="text-end" style="width:110px">Quy 99 (chỉ)</th>
+                      <th style="width:44px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tradein-body">
+                    <tr id="tradein-empty"><td colspan="7" class="text-muted text-center py-3">Chưa có hàng cũ</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-light">
+                      <td class="small text-muted">Tổng</td>
+                      <td></td>
+                      <td class="text-end small fw-bold" id="ti-total-gross">0.000</td>
+                      <td class="text-end small fw-bold" id="ti-total-stone">0.000</td>
+                      <td class="text-end small fw-bold" id="ti-total-net">0.000</td>
+                      <td class="text-end fw-bold" id="ti-total-conv">0.000 chỉ</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div class="card-footer">
+                <button class="btn btn-sm btn-ghost-secondary" onclick="addTradeInRow()">+ Thêm hàng cũ</button>
+                <div class="dropdown d-inline-block">
+                  <button class="btn btn-sm btn-ghost-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" onclick="loadItemPresets('tradein')">+ Từ mẫu</button>
+                  <ul class="dropdown-menu" id="tradein-preset-menu" style="max-height:260px; overflow-y:auto;">
+                    <li><span class="dropdown-item-text text-muted small">Đang tải...</span></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tổng kết + thanh toán -->
+          <div class="col-12">
+            <div class="card">
+              <div class="card-body">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-5 d-none" id="gold-price-row">
+                    <label class="form-label required">💰 Giá vàng 99/chỉ (dùng chung cho cả toa)</label>
+                    <input id="gold-price-99" type="text" inputmode="decimal" class="form-control" step="1000" min="0"
+                           placeholder="VD: 8000000" oninput="calcTotal()"/>
+                    <div class="text-muted small mt-1">Mọi TL vàng bán ra/mua vào trong toa sẽ tự quy đổi về chỉ-99 rồi trừ ròng cho nhau, sau đó mới nhân với giá này để ra tiền.</div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Ghi chú</label>
+                    <input id="notes" type="text" class="form-control" placeholder="Tuỳ chọn..."/>
+                  </div>
+                </div>
+                <hr class="mt-0"/>
+                <div class="row g-4 align-items-start">
+
+                  <!-- Cột trái: Thống kê -->
+                  <div class="col-md-5">
+                    <div class="summary-box">
+                      <div id="gold-summary-block" class="d-none mb-3 pb-3" style="border-bottom:1px dashed #cbd5e1">
+                        <div class="fw-bold mb-2">🥇 Quy đổi vàng 99</div>
+                        <div class="d-flex justify-content-between mb-1">
+                          <span class="text-muted">Bán ra (quy 99):</span>
+                          <span id="gold-sold-show">0 chỉ</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                          <span class="text-muted">Mua vào (quy 99):</span>
+                          <span id="gold-bought-show">0 chỉ</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                          <span class="text-muted">Còn lại (99):</span>
+                          <span id="gold-remaining-show" class="fw-bold">0 chỉ</span>
+                        </div>
+                        <div class="input-group input-group-sm mb-2">
+                          <span class="input-group-text">Quy ra tiền</span>
+                          <input id="gold-to-money-99" type="text" inputmode="decimal" step="0.001" class="form-control" oninput="onGoldToMoneyInput(this.value)"/>
+                          <span class="input-group-text">chỉ</span>
+                        </div>
+                        <div class="text-muted small mb-1">Phần vàng còn lại không quy ra tiền sẽ để lại thành nợ vàng.</div>
+                        <div class="d-flex justify-content-between">
+                          <span class="text-muted">→ Nợ vàng còn lại:</span>
+                          <span id="gold-debt-show" class="fw-bold">0 chỉ</span>
+                        </div>
+                        <div class="text-muted small d-none" id="gold-debt-old-note"></div>
+                      </div>
+
+                      <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Tạm tính (công + hàng thường):</span>
+                        <span id="subtotal-show">0 đ</span>
+                      </div>
+                      <div class="d-flex justify-content-between mb-2 d-none" id="gold-money-row">
+                        <span class="text-muted">Tiền vàng quy đổi:</span>
+                        <span id="gold-money-show">0 đ</span>
+                      </div>
+                      <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Chiết khấu <span id="ck-pct">(0%)</span>:</span>
+                        <span id="discount-show" class="text-danger">- 0 đ</span>
+                      </div>
+                      <hr class="my-2"/>
+                      <div class="d-flex justify-content-between">
+                        <span class="fw-bold" id="total-label">Tổng cộng:</span>
+                        <span class="total-line" id="total-show">0 đ</span>
+                      </div>
+                      <div class="alert alert-warning py-2 mt-2 mb-0 d-none" id="refund-note">
+                        Tổng tiền âm — tiệm cần trả lại tiền cho khách.
+                      </div>
+
+                      <!-- Nợ cũ (tiền) — luôn hiện, kể cả 0đ, để nhân viên không phải cuộn
+                           lên lại chỗ chọn khách mới thấy; số âm = tiệm đang dư/nợ khách. -->
+                      <hr class="my-2"/>
+                      <div class="d-flex justify-content-between">
+                        <span class="text-muted">Nợ cũ (tiền):</span>
+                        <span id="old-debt-money-show">0 đ</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span class="fw-bold">Tổng tiền thanh toán:</span>
+                        <span class="total-line" id="grand-total-show">0 đ</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Cột phải: Thanh toán -->
+                  <div class="col-md-4">
+                    <label class="form-label fw-bold" id="pay-section-label">Thanh toán ngay</label>
+                    <div class="mb-2">
+                      <select id="pay-method" class="form-select mb-2">
+                        <option value="cash">💵 Tiền mặt</option>
+                        <option value="transfer">🏦 Chuyển khoản</option>
+                        <option value="card">💳 Thẻ ngân hàng</option>
+                        <option value="installment">📅 Trả góp / Nợ</option>
+                      </select>
+                      <input id="pay-amount" type="text" inputmode="decimal" class="form-control" placeholder="Để trống nếu khách chưa trả gì" step="1000" oninput="onPayAmountInput(this.value)"/>
+                      <div class="text-muted small mt-1">Bỏ trống hoặc để 0 = khách CHƯA trả gì hôm nay, toàn bộ ghi thành nợ.</div>
+                    </div>
+                    <!-- Đây là số nợ tiền CUỐI CÙNG (đã gồm nợ cũ, đã trừ số vừa thu ở trên)
+                         — chỉ hiện 1 chỗ duy nhất, ngay cạnh ô thu tiền để tiện đối chiếu. -->
+                    <div class="d-flex justify-content-between">
+                      <span class="text-muted" id="debt-label">Còn nợ (kể cả nợ cũ):</span>
+                      <span class="debt-line" id="debt-show">0 đ</span>
+                    </div>
+                    <div class="text-muted small d-none" id="debt-old-note"></div>
+                  </div>
+
+                  <!-- Nút tạo -->
+                  <div class="col-md-3 d-flex flex-column gap-2 pt-4">
+                    <button class="btn btn-primary btn-lg" id="submit-order-btn" onclick="createWholesaleOrder()">
+                      📄 Tạo đơn & In A4
+                    </button>
+                    <button class="btn btn-outline-secondary" id="save-draft-btn" onclick="saveWholesaleDraft()">
+                      💾 Lưu tạm — hoàn thành sau
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal tạo nhanh khách -->
+<div class="modal modal-blur fade" id="modal-quick-customer" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Thêm khách mới</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="qc-type" id="qc-type-individual" value="individual" checked onchange="onQcTypeChange()"/>
+            <label class="btn btn-outline-primary" for="qc-type-individual">👤 Cá nhân</label>
+            <input type="radio" class="btn-check" name="qc-type" id="qc-type-business" value="business" onchange="onQcTypeChange()"/>
+            <label class="btn btn-outline-primary" for="qc-type-business">🏢 Doanh nghiệp</label>
+          </div>
+        </div>
+        <div class="mb-3 d-none" id="qc-tax-section">
+          <label class="form-label required">Mã số thuế</label>
+          <div class="d-flex gap-2">
+            <input id="qc-taxcode" type="text" class="form-control" placeholder="VD: 0101245486"/>
+            <button type="button" class="btn btn-outline-primary text-nowrap" id="btn-qc-tax-lookup" onclick="lookupQcTaxCode()">Tra cứu</button>
+          </div>
+          <div id="qc-tax-status" class="small mt-1"></div>
+        </div>
+        <div class="mb-3"><label class="form-label required" id="qc-name-label">Họ tên</label><input id="qc-name" type="text" class="form-control"/></div>
+        <div class="mb-3"><label class="form-label">Số điện thoại</label><input id="qc-phone" type="text" class="form-control"/></div>
+        <div class="mb-3" id="qc-idcard-section"><label class="form-label">Số CCCD/CMND</label><input id="qc-idcard" type="text" class="form-control"/></div>
+        <div class="mb-3"><label class="form-label">Địa chỉ</label><input id="qc-address" type="text" class="form-control"/></div>
+        <hr/>
+        <div class="text-muted small mb-2">Nợ cũ (nếu có) — VD: khách có nợ từ trước khi dùng phần mềm này, bỏ trống nếu chưa có nợ gì.</div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Nợ tiền (đ)</label>
+            <input id="qc-debt-money" type="text" inputmode="decimal" class="form-control form-control-sm" step="1000" placeholder="0"/>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Nợ vàng (chỉ 99)</label>
+            <input id="qc-debt-gold" type="text" inputmode="decimal" class="form-control form-control-sm" step="0.001" placeholder="0"/>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="saveQuickCustomer()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal chi tiết công nợ khách hàng -->
+<div class="modal modal-blur fade" id="modal-customer-debt" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Chi tiết công nợ — <span id="debt-cust-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <div class="card card-sm"><div class="card-body">
+              <div class="text-muted small" id="debt-modal-money-label">Tổng nợ tiền</div>
+              <div class="h3 mb-0" id="debt-modal-money">0 đ</div>
+            </div></div>
+          </div>
+          <div class="col-6">
+            <div class="card card-sm"><div class="card-body">
+              <div class="text-muted small" id="debt-modal-gold-label">Tổng nợ vàng (99)</div>
+              <div class="h3 mb-0" id="debt-modal-gold">0 chỉ</div>
+            </div></div>
+          </div>
+        </div>
+        <div class="fw-bold mb-1">🧾 Từ hoá đơn</div>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-vcenter">
+            <thead><tr>
+              <th>Số HĐ</th><th>Loại</th><th>Ngày</th>
+              <th class="text-end">Tổng tiền</th><th class="text-end">Đã thu</th>
+              <th class="text-end">Nợ tiền</th><th class="text-end">Nợ vàng</th><th>Trạng thái</th><th></th>
+            </tr></thead>
+            <tbody id="debt-modal-rows"></tbody>
+          </table>
+        </div>
+
+        <div id="gold-collect-section" class="d-none mb-3">
+          <div class="fw-bold mb-1">🥇 Thu nợ vàng</div>
+          <div class="text-muted small mb-2">Ghi nhận khi khách mang vàng đến trả bớt/trả hết nợ vàng đang nợ — không cần tạo hoá đơn mới.</div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Số chỉ thu được (quy 99)</label>
+              <input id="gold-collect-amount" type="text" inputmode="decimal" step="0.001" min="0" class="form-control form-control-sm" placeholder="VD: 1.5"/>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small mb-1">Ghi chú</label>
+              <input id="gold-collect-note" type="text" class="form-control form-control-sm" placeholder="VD: Khách mang vàng đến trả nợ"/>
+            </div>
+            <div class="col-md-3">
+              <button type="button" class="btn btn-sm btn-warning w-100" onclick="collectGoldDebt()">🥇 Ghi nhận thu nợ</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="fw-bold mb-1">📝 Điều chỉnh nợ nhập tay</div>
+        <div class="text-muted small mb-2">Dùng để nhập nợ cũ trước khi dùng phần mềm, hoặc chỉnh sửa/xoá bớt nợ thủ công. Số dương = tăng nợ, số âm = giảm nợ.</div>
+        <div class="table-responsive mb-2">
+          <table class="table table-sm table-vcenter">
+            <thead><tr>
+              <th>Ngày</th><th>Ghi chú</th>
+              <th class="text-end">Nợ tiền</th><th class="text-end">Nợ vàng</th><th></th>
+            </tr></thead>
+            <tbody id="debt-adjustment-rows"></tbody>
+          </table>
+        </div>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Nợ tiền (đ)</label>
+            <input id="adj-money" type="text" inputmode="decimal" class="form-control form-control-sm" step="1000" placeholder="VD: 5000000"/>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Nợ vàng (chỉ 99)</label>
+            <input id="adj-gold" type="text" inputmode="decimal" class="form-control form-control-sm" step="0.001" placeholder="VD: 2"/>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Ghi chú</label>
+            <input id="adj-note" type="text" class="form-control form-control-sm" placeholder="VD: Nợ cũ trước khi dùng phần mềm"/>
+          </div>
+          <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-primary w-100" onclick="addDebtAdjustment()">+ Thêm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal xác nhận trước khi lưu & in -->
+<div class="modal modal-blur fade" id="modal-confirm-order" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Xác nhận trước khi lưu &amp; in</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-1">Khách hàng</div>
+        <div class="fw-medium mb-3" id="cf-cust-name"></div>
+
+        <table class="table table-sm table-vcenter mb-0">
+          <tbody>
+            <tr><td class="text-muted">Tổng tiền hàng/công</td><td class="text-end" id="cf-subtotal"></td></tr>
+            <tr class="d-none" id="cf-gold-money-row"><td class="text-muted">Tiền vàng quy đổi</td><td class="text-end" id="cf-gold-money"></td></tr>
+            <tr class="d-none" id="cf-discount-row"><td class="text-muted">Chiết khấu</td><td class="text-end text-danger" id="cf-discount"></td></tr>
+            <tr><td class="fw-bold">Tổng cộng (toa này)</td><td class="text-end fw-bold" id="cf-total"></td></tr>
+            <tr><td class="text-muted">Khách đã trả hôm nay</td><td class="text-end" id="cf-paid"></td></tr>
+          </tbody>
+        </table>
+        <hr class="my-2"/>
+        <table class="table table-sm table-vcenter mb-0">
+          <tbody>
+            <tr>
+              <td class="text-muted" id="cf-money-debt-label">Nợ tiền còn lại (kể cả nợ cũ)</td>
+              <td class="text-end"><span class="fs-3 fw-bold" id="cf-money-debt">0 đ</span></td>
+            </tr>
+            <tr class="d-none" id="cf-gold-debt-row">
+              <td class="text-muted">Nợ vàng còn lại (kể cả nợ cũ)</td>
+              <td class="text-end"><span class="fs-3 fw-bold" id="cf-gold-debt">0 chỉ</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">← Xem lại</button>
+        <button class="btn btn-primary" id="cf-confirm-btn" onclick="submitOrderConfirmed()">✓ Xác nhận, Lưu &amp; In</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal sửa mẫu hàng (Mục tuỳ ý / Hàng cũ khách trả) -->
+<div class="modal modal-blur fade" id="modal-edit-preset" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Sửa mẫu hàng</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ep-kind"/>
+        <input type="hidden" id="ep-id"/>
+        <div class="mb-3"><label class="form-label required">Tên hàng</label><input id="ep-name" type="text" class="form-control"/></div>
+        <div class="row g-2">
+          <div class="col-3">
+            <label class="form-label small mb-1">Tuổi</label>
+            <input id="ep-purity" type="text" inputmode="decimal" step="0.5" class="form-control"/>
+          </div>
+          <div class="col-3">
+            <label class="form-label small mb-1">TL vàng+hột</label>
+            <input id="ep-gross" type="text" inputmode="decimal" step="0.001" class="form-control"/>
+          </div>
+          <div class="col-3">
+            <label class="form-label small mb-1">TL hột</label>
+            <input id="ep-stone" type="text" inputmode="decimal" step="0.001" class="form-control"/>
+          </div>
+          <div class="col-3" id="ep-price-wrap">
+            <label class="form-label small mb-1">Công/Giá</label>
+            <input id="ep-price" type="text" inputmode="decimal" step="1000" class="form-control"/>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Huỷ</button>
+        <button class="btn btn-primary" onclick="saveEditedPreset()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+import { printInvoiceA4 } from "/js/print.js";
+
+requireLogin();
+  initSidebar();
+// Init date
+document.getElementById("inv-date").value = new Date().toISOString().slice(0, 10);
+
+const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0)) + " đ";
+
+// ── CART ────────────────────────────────────────────────
+let cart = []; // hàng thường: { variantId, sku, name, qty, unitPrice }
+               // hàng bạc: thêm isMetal, metalType:'silver', purity, basePurity, weight, pricePerUnit, fee, unit
+               // hàng vàng: thêm isMetal, metalType:'gold', purity, basePurity(99), weight, fee, unit — KHÔNG có
+               // giá riêng, tiền vàng tính gộp ở cấp toa qua giá vàng 99 chung (xem calcTotal)
+const lastMetalPrice = { gold: null, silver: null }; // nhớ giá vừa nhập để đỡ gõ lại cho món tiếp theo (chỉ dùng cho bạc)
+let tradeIns = []; // hàng cũ khách trả (mua vào, luôn quy vàng 99): { name, purity, weight, conv99 }
+let goldToMoneyDirty = false; // true khi người dùng tự sửa ô "Quy ra tiền" — khi đó không tự đồng bộ theo còn lại nữa
+let payAmountDirty = false; // true khi người dùng tự sửa ô "Số tiền" — khi đó không tự đồng bộ theo tổng tiền nữa
+let isQuickMode = false; // hoá đơn nháp: ẩn khỏi danh sách chính, không trừ kho, vẫn lưu công nợ
+let customItems = []; // mục tuỳ ý (chỉ dùng khi hoá đơn nháp): { name, purity, grossWeight, stoneWeight, weight, price, qty }
+                       // grossWeight = TL vàng+hột, stoneWeight = TL hột (trừ hao), weight = TL vàng thực
+                       // (net, tự tính = grossWeight - stoneWeight) — có purity+grossWeight → coi là hàng
+                       // vàng, "price" là tiền công, tự quy đổi vàng 99. Không có → mục thường, "price" là đơn giá phẳng.
+
+window.onQuickModeToggle = function(checked) {
+  isQuickMode = checked;
+  document.getElementById("quick-mode-note").classList.toggle("d-none", !checked);
+  document.getElementById("custom-items-section").classList.toggle("d-none", !checked);
+  if (!checked) { customItems = []; renderCustomItems(); } // tắt nháp thì dọn sạch, tránh gửi nhầm nếu bật/tắt lại
+};
+
+window.addCustomItemRow = function() {
+  customItems.push({ name: "", purity: 0, grossWeight: 0, stoneWeight: 0, weight: 0, price: 0, qty: 1 });
+  renderCustomItems();
+};
+
+// ── MẪU HÀNG LƯU SẴN (Mục tuỳ ý + Hàng cũ khách trả) ─────
+// Món hay lặp lại (cùng tên/tuổi/trọng lượng/công) có thể lưu lại 1 lần rồi chọn nhanh
+// qua "+ Từ mẫu" thay vì gõ tay lại mỗi lần — đỡ mất công, đỡ gõ sai.
+let loadedPresets = { custom: [], tradein: [] };
+
+window.loadItemPresets = async function(kind) {
+  const menu = document.getElementById(kind === "custom" ? "custom-preset-menu" : "tradein-preset-menu");
+  menu.innerHTML = `<li><span class="dropdown-item-text text-muted small">Đang tải...</span></li>`;
+  try {
+    const { presets } = await api.get(`/api/item-presets?kind=${kind}`);
+    loadedPresets[kind] = presets;
+    // Bấm vào tên = áp dụng mẫu; ✏️/✕ dừng lan sự kiện (stopPropagation) để sửa/xoá mẫu mà
+    // không vô tình thêm luôn 1 dòng mới vào toa.
+    menu.innerHTML = presets.length ? presets.map((p, i) => `
+      <li class="d-flex align-items-center px-2">
+        <a class="dropdown-item flex-fill d-flex justify-content-between align-items-center gap-2 px-1" href="#" onclick="applyItemPreset('${kind}', ${i}); return false;">
+          <span>${p.name}</span>
+          <span class="text-muted small text-nowrap">${p.purity ? "T" + p.purity : ""}${p.gross_weight ? " " + p.gross_weight + "c" : ""}</span>
+        </a>
+        <button type="button" class="btn btn-sm btn-ghost-secondary px-1" title="Sửa mẫu" onclick="event.stopPropagation(); editItemPreset('${kind}', ${i});">✏️</button>
+        <button type="button" class="btn btn-sm btn-ghost-danger px-1" title="Xoá mẫu" onclick="event.stopPropagation(); deleteItemPresetConfirm('${kind}', ${i});">✕</button>
+      </li>`).join("") : `<li><span class="dropdown-item-text text-muted small">Chưa có mẫu nào — bấm 💾 ở 1 dòng để lưu</span></li>`;
+  } catch (err) {
+    menu.innerHTML = `<li><span class="dropdown-item-text text-danger small">Lỗi tải mẫu</span></li>`;
+  }
+};
+
+window.applyItemPreset = function(kind, i) {
+  const p = loadedPresets[kind][i];
+  if (!p) return;
+  const grossWeight = parseFloat(p.gross_weight) || 0;
+  const stoneWeight = parseFloat(p.stone_weight) || 0;
+  const weight = Math.max(0, grossWeight - stoneWeight);
+  const purity = parseFloat(p.purity) || 0;
+  if (kind === "custom") {
+    customItems.push({ name: p.name, purity, grossWeight, stoneWeight, weight, price: parseInt(p.price) || 0, qty: 1 });
+    renderCustomItems();
+  } else {
+    tradeIns.push({ name: p.name, purity, grossWeight, stoneWeight, weight, conv99: weight * (purity / 99) });
+    renderTradeIns();
+  }
+};
+
+window.saveCustomItemPreset = async function(idx) {
+  const it = customItems[idx];
+  if (!it || !it.name.trim()) return alert("⚠️ Cần nhập tên hàng trước khi lưu mẫu");
+  try {
+    await api.post("/api/item-presets", {
+      kind: "custom", name: it.name.trim(), purity: it.purity,
+      gross_weight: it.grossWeight, stone_weight: it.stoneWeight, price: it.price,
+    });
+    alert(`✓ Đã lưu mẫu "${it.name}" — lần sau chọn lại qua "+ Từ mẫu"`);
+  } catch (err) { alert(err.message); }
+};
+
+window.saveTradeInPreset = async function(idx) {
+  const t = tradeIns[idx];
+  if (!t || !t.name.trim()) return alert("⚠️ Cần nhập tên hàng trước khi lưu mẫu");
+  try {
+    await api.post("/api/item-presets", {
+      kind: "tradein", name: t.name.trim(), purity: t.purity,
+      gross_weight: t.grossWeight, stone_weight: t.stoneWeight, price: 0,
+    });
+    alert(`✓ Đã lưu mẫu "${t.name}" — lần sau chọn lại qua "+ Từ mẫu"`);
+  } catch (err) { alert(err.message); }
+};
+
+window.editItemPreset = function(kind, i) {
+  const p = loadedPresets[kind][i];
+  if (!p) return;
+  document.getElementById("ep-kind").value = kind;
+  document.getElementById("ep-id").value = p.id;
+  document.getElementById("ep-name").value = p.name || "";
+  document.getElementById("ep-purity").value = p.purity || "";
+  document.getElementById("ep-gross").value = p.gross_weight || "";
+  document.getElementById("ep-stone").value = p.stone_weight || "";
+  document.getElementById("ep-price").value = p.price || "";
+  // "Công/Giá" không có ý nghĩa với mẫu hàng cũ (dẻ) — ẩn đi cho đỡ rối, giữ nguyên giá
+  // trị 0 sẵn có khi lưu lại.
+  document.getElementById("ep-price-wrap").classList.toggle("d-none", kind === "tradein");
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-edit-preset")).show();
+};
+
+window.saveEditedPreset = async function() {
+  const kind = document.getElementById("ep-kind").value;
+  const id = document.getElementById("ep-id").value;
+  const name = document.getElementById("ep-name").value.trim();
+  if (!name) return alert("⚠️ Tên hàng là bắt buộc");
+  try {
+    await api.put(`/api/item-presets/${id}`, {
+      name,
+      purity: parseFloat(document.getElementById("ep-purity").value) || 0,
+      gross_weight: parseFloat(document.getElementById("ep-gross").value) || 0,
+      stone_weight: parseFloat(document.getElementById("ep-stone").value) || 0,
+      price: kind === "tradein" ? 0 : (parseInt(document.getElementById("ep-price").value) || 0),
+    });
+    bootstrap.Modal.getInstance(document.getElementById("modal-edit-preset")).hide();
+    await loadItemPresets(kind);
+  } catch (err) { alert(err.message); }
+};
+
+window.deleteItemPresetConfirm = async function(kind, i) {
+  const p = loadedPresets[kind][i];
+  if (!p) return;
+  if (!confirm(`Xoá mẫu "${p.name}"?`)) return;
+  try {
+    await api.delete(`/api/item-presets/${p.id}`);
+    await loadItemPresets(kind);
+  } catch (err) { alert(err.message); }
+};
+
+function renderCustomItems() {
+  const tbody = document.getElementById("custom-items-body");
+  if (!customItems.length) {
+    tbody.innerHTML = `<tr id="custom-items-empty"><td colspan="10" class="text-muted text-center py-3">Chưa có mục tuỳ ý</td></tr>`;
+    calcTotal();
+    return;
+  }
+  tbody.innerHTML = customItems.map((it, idx) => {
+    const hasGold = it.purity > 0 && it.weight > 0;
+    const conv99  = hasGold ? it.weight * it.qty * (it.purity / 99) : 0;
+    return `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm" placeholder="VD: Nhẫn vàng tuỳ ý"
+            value="${it.name}" oninput="updateCustomItem(${idx}, 'name', this.value)"/></td>
+      <td><input type="text" inputmode="numeric" min="1" class="form-control form-control-sm"
+            value="${it.qty}" oninput="updateCustomItem(${idx}, 'qty', this.value)"/></td>
+      <td><input type="text" inputmode="decimal" step="0.001" class="form-control form-control-sm"
+            value="${it.grossWeight || ""}" oninput="updateCustomItem(${idx}, 'grossWeight', this.value)"/></td>
+      <td><input type="text" inputmode="decimal" step="0.001" class="form-control form-control-sm"
+            value="${it.stoneWeight || ""}" oninput="updateCustomItem(${idx}, 'stoneWeight', this.value)"/></td>
+      <td class="text-end" id="ci-net-${idx}">${it.weight.toFixed(3)}</td>
+      <td><input type="text" inputmode="decimal" step="0.5" class="form-control form-control-sm"
+            value="${it.purity || ""}" oninput="updateCustomItem(${idx}, 'purity', this.value)"/></td>
+      <td class="text-end" id="ci-conv-${idx}">${hasGold ? conv99.toFixed(3) + " chỉ" : "—"}</td>
+      <td><input type="text" inputmode="decimal" step="1000" class="form-control form-control-sm"
+            value="${it.price || ""}" oninput="updateCustomItem(${idx}, 'price', this.value)"/></td>
+      <td class="text-end fw-bold" id="ci-total-${idx}">${fmtVND(it.price * it.qty)}</td>
+      <td class="text-nowrap">
+        <button class="btn btn-sm btn-ghost-secondary" title="Lưu làm mẫu để dùng lại nhanh" onclick="saveCustomItemPreset(${idx})">💾</button>
+        <button class="btn btn-sm btn-ghost-danger" onclick="removeCustomItem(${idx})">✕</button>
+      </td>
+    </tr>`;
+  }).join("");
+  calcTotal();
+}
+
+window.updateCustomItem = function(idx, field, value) {
+  const it = customItems[idx];
+  if (!it) return;
+  it[field] = field === "name" ? value : (parseFloat(value) || 0);
+  if (field === "qty") it.qty = Math.max(1, it.qty || 1);
+  // TL vàng thực = TL vàng+hột − TL hột (trừ hao) — tự tính lại mỗi khi 1 trong 2 đổi.
+  it.weight = Math.max(0, (it.grossWeight || 0) - (it.stoneWeight || 0));
+
+  const hasGold = it.purity > 0 && it.weight > 0;
+  const conv99  = hasGold ? it.weight * it.qty * (it.purity / 99) : 0;
+  const netEl   = document.getElementById(`ci-net-${idx}`);
+  if (netEl) netEl.textContent = it.weight.toFixed(3);
+  const convEl  = document.getElementById(`ci-conv-${idx}`);
+  if (convEl) convEl.textContent = hasGold ? conv99.toFixed(3) + " chỉ" : "—";
+  const totalEl = document.getElementById(`ci-total-${idx}`);
+  if (totalEl) totalEl.textContent = fmtVND(it.price * it.qty);
+  calcTotal();
+};
+
+window.removeCustomItem = function(idx) {
+  customItems.splice(idx, 1);
+  renderCustomItems();
+};
+
+// Chỉ hiện phần "Hàng cũ khách trả" + ô giá vàng 99 khi tiệm có bật ngành vàng/bạc
+(async function initTradeInVisibility() {
+  try {
+    const { settings } = await api.get("/api/settings");
+    const enabled = (settings.enabled_industries || "").split(",").filter(Boolean);
+    const showTradeIn = !enabled.length || enabled.includes("gold") || enabled.includes("silver");
+    document.getElementById("tradein-section").classList.toggle("d-none", !showTradeIn);
+    document.getElementById("gold-price-row").classList.toggle("d-none", !showTradeIn);
+  } catch {}
+})();
+
+function renderCart() {
+  const tbody = document.getElementById("ws-items");
+  document.getElementById("item-count").textContent = `${cart.length} mặt hàng`;
+  if (!cart.length) {
+    tbody.innerHTML = `<tr id="empty-row"><td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm</td></tr>`;
+    calcTotal();
+    return;
+  }
+  tbody.innerHTML = cart.map((item, idx) => item.isMetal && item.metalType === "gold" ? `
+    <tr>
+      <td>
+        <div class="fw-medium">${item.name}</div>
+        <div class="d-flex align-items-center gap-1 mb-2">
+          <span class="text-muted small">${item.sku}</span>
+          <span class="badge metal-badge bg-warning-lt">🥇 Vàng</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          <div class="input-group input-group-sm metal-field" style="width:120px">
+            <span class="input-group-text">Tuổi</span>
+            <input type="text" inputmode="decimal" step="0.5" class="form-control"
+                   value="${item.purity}" oninput="updateMetalItem(${idx}, 'purity', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:150px">
+            <span class="input-group-text">TL+hột</span>
+            <input type="text" inputmode="decimal" step="0.001" class="form-control"
+                   value="${item.grossWeight}" oninput="updateMetalItem(${idx}, 'grossWeight', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:135px">
+            <span class="input-group-text">Hột</span>
+            <input type="text" inputmode="decimal" step="0.001" class="form-control"
+                   value="${item.stoneWeight || ""}" oninput="updateMetalItem(${idx}, 'stoneWeight', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:150px">
+            <span class="input-group-text">Công</span>
+            <input type="text" inputmode="decimal" step="1000" class="form-control"
+                   value="${item.fee}" oninput="updateMetalItem(${idx}, 'fee', this.value)"/>
+          </div>
+          <div class="text-muted small">
+            TL vàng: <b id="ws-net-${idx}">${item.weight.toFixed(3)}</b> ${item.unit} —
+            Quy 99: <b id="ws-conv-${idx}">${(item.weight * item.qty * (item.purity / 99)).toFixed(3)}</b> chỉ (đã nhân SL)
+          </div>
+        </div>
+      </td>
+      <td>
+        <div class="qty-ctrl">
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},-1)">−</button>
+          <input type="text" inputmode="numeric" class="form-control form-control-sm"
+                 value="${item.qty}" min="1"
+                 onchange="updateQty(${idx}, this.value)"/>
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},1)">+</button>
+        </div>
+      </td>
+      <td class="text-end" id="ws-price-${idx}">${fmtVND(item.unitPrice)}</td>
+      <td class="text-end fw-bold" id="ws-linetotal-${idx}">${fmtVND(item.qty * item.unitPrice)}</td>
+      <td>
+        <button class="btn btn-sm btn-ghost-danger" onclick="removeItem(${idx})">✕</button>
+      </td>
+    </tr>` : item.isMetal ? `
+    <tr>
+      <td>
+        <div class="fw-medium">${item.name}</div>
+        <div class="d-flex align-items-center gap-1 mb-2">
+          <span class="text-muted small">${item.sku}</span>
+          <span class="badge metal-badge bg-secondary-lt">🥈 Bạc</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <div class="input-group input-group-sm metal-field" style="width:120px">
+            <span class="input-group-text">Tuổi</span>
+            <input type="text" inputmode="decimal" step="0.5" class="form-control"
+                   value="${item.purity}" oninput="updateMetalItem(${idx}, 'purity', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:140px">
+            <span class="input-group-text">TL ${item.unit}</span>
+            <input type="text" inputmode="decimal" step="0.001" class="form-control"
+                   value="${item.weight}" oninput="updateMetalItem(${idx}, 'weight', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:175px">
+            <span class="input-group-text">Giá/${item.unit}</span>
+            <input type="text" inputmode="decimal" step="1000" class="form-control"
+                   value="${item.pricePerUnit}" oninput="updateMetalItem(${idx}, 'pricePerUnit', this.value)"/>
+          </div>
+          <div class="input-group input-group-sm metal-field" style="width:150px">
+            <span class="input-group-text">Công</span>
+            <input type="text" inputmode="decimal" step="1000" class="form-control"
+                   value="${item.fee}" oninput="updateMetalItem(${idx}, 'fee', this.value)"/>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div class="qty-ctrl">
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},-1)">−</button>
+          <input type="text" inputmode="numeric" class="form-control form-control-sm"
+                 value="${item.qty}" min="1"
+                 onchange="updateQty(${idx}, this.value)"/>
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},1)">+</button>
+        </div>
+      </td>
+      <td class="text-end" id="ws-price-${idx}">${fmtVND(item.unitPrice)}</td>
+      <td class="text-end fw-bold" id="ws-linetotal-${idx}">${fmtVND(item.qty * item.unitPrice)}</td>
+      <td>
+        <button class="btn btn-sm btn-ghost-danger" onclick="removeItem(${idx})">✕</button>
+      </td>
+    </tr>` : `
+    <tr>
+      <td>
+        <div class="fw-medium">${item.name}</div>
+        <div class="text-muted small">${item.sku}</div>
+      </td>
+      <td>
+        <div class="qty-ctrl">
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},-1)">−</button>
+          <input type="text" inputmode="numeric" class="form-control form-control-sm"
+                 value="${item.qty}" min="1"
+                 onchange="updateQty(${idx}, this.value)"/>
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="changeQty(${idx},1)">+</button>
+        </div>
+      </td>
+      <td>
+        <input type="text" inputmode="decimal" class="form-control form-control-sm text-end"
+               value="${item.unitPrice}" step="1000" min="0"
+               onchange="updatePrice(${idx}, this.value)"/>
+      </td>
+      <td class="text-end fw-bold">${fmtVND(item.qty * item.unitPrice)}</td>
+      <td>
+        <button class="btn btn-sm btn-ghost-danger" onclick="removeItem(${idx})">✕</button>
+      </td>
+    </tr>`).join("");
+  calcTotal();
+}
+
+window.changeQty = function(idx, delta) {
+  cart[idx].qty = Math.max(1, (cart[idx].qty || 1) + delta);
+  renderCart();
+};
+window.updateQty = function(idx, val) {
+  cart[idx].qty = Math.max(1, parseInt(val) || 1);
+  renderCart();
+};
+window.updatePrice = function(idx, val) {
+  cart[idx].unitPrice = Math.max(0, parseInt(val) || 0);
+  renderCart();
+};
+window.removeItem = function(idx) {
+  cart.splice(idx, 1);
+  renderCart();
+};
+
+// Cập nhật 1 ô (tuổi/TL/giá/công) của dòng vàng-bạc mà không render lại cả bảng,
+// để không bị mất focus/con trỏ khi đang gõ.
+window.updateMetalItem = function(idx, field, value) {
+  const item = cart[idx];
+  if (!item) return;
+  item[field] = parseFloat(value) || 0;
+
+  if (item.metalType === "gold") {
+    // Vàng: TL vàng thực (net) = TL vàng+hột (gross) − TL hột (trừ hao), tự tính lại
+    // mỗi khi 1 trong 2 đổi. Không có giá riêng theo dòng — "unitPrice" ở đây chỉ là
+    // tiền công của món này (dùng để ghi order_items/tồn kho); tiền vàng thật tính gộp
+    // ở cấp toa qua giá vàng 99 chung (xem calcTotal).
+    item.weight = Math.max(0, (item.grossWeight || 0) - (item.stoneWeight || 0));
+    item.unitPrice = item.fee;
+    const netEl = document.getElementById(`ws-net-${idx}`);
+    if (netEl) netEl.textContent = item.weight.toFixed(3);
+    const convEl = document.getElementById(`ws-conv-${idx}`);
+    if (convEl) convEl.textContent = (item.weight * item.qty * (item.purity / 99)).toFixed(3);
+  } else {
+    item.unitPrice = Math.round(item.weight * (item.purity / item.basePurity) * item.pricePerUnit + item.fee);
+    if (field === "pricePerUnit") lastMetalPrice[item.metalType] = item.pricePerUnit;
+  }
+
+  document.getElementById(`ws-price-${idx}`).textContent = fmtVND(item.unitPrice);
+  document.getElementById(`ws-linetotal-${idx}`).textContent = fmtVND(item.unitPrice * item.qty);
+  calcTotal();
+};
+
+// ── HÀNG CŨ KHÁCH TRẢ (MUA VÀO — luôn quy về vàng 99) ────
+window.addTradeInRow = function() {
+  tradeIns.push({ name: "", purity: 99, grossWeight: 0, stoneWeight: 0, weight: 0, conv99: 0 });
+  renderTradeIns();
+};
+
+function renderTradeIns() {
+  const tbody = document.getElementById("tradein-body");
+  if (!tradeIns.length) {
+    tbody.innerHTML = `<tr id="tradein-empty"><td colspan="7" class="text-muted text-center py-3">Chưa có hàng cũ</td></tr>`;
+    calcTotal();
+    return;
+  }
+  tbody.innerHTML = tradeIns.map((t, idx) => `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm" placeholder="VD: Nhẫn vàng cũ"
+            value="${t.name}" oninput="updateTradeInRow(${idx}, 'name', this.value)"/></td>
+      <td><input type="text" inputmode="decimal" step="0.5" class="form-control form-control-sm"
+            value="${t.purity || ""}" oninput="updateTradeInRow(${idx}, 'purity', this.value)"/></td>
+      <td><input type="text" inputmode="decimal" step="0.001" class="form-control form-control-sm"
+            value="${t.grossWeight || ""}" oninput="updateTradeInRow(${idx}, 'grossWeight', this.value)"/></td>
+      <td><input type="text" inputmode="decimal" step="0.001" class="form-control form-control-sm"
+            value="${t.stoneWeight || ""}" oninput="updateTradeInRow(${idx}, 'stoneWeight', this.value)"/></td>
+      <td class="text-end" id="tradein-net-${idx}">${t.weight.toFixed(3)}</td>
+      <td class="text-end fw-bold" id="tradein-conv-${idx}">${t.conv99.toFixed(3)} chỉ</td>
+      <td class="text-nowrap">
+        <button class="btn btn-sm btn-ghost-secondary" title="Lưu làm mẫu để dùng lại nhanh" onclick="saveTradeInPreset(${idx})">💾</button>
+        <button class="btn btn-sm btn-ghost-danger" onclick="removeTradeInRow(${idx})">✕</button>
+      </td>
+    </tr>`).join("");
+  calcTotal();
+}
+
+window.updateTradeInRow = function(idx, field, value) {
+  const t = tradeIns[idx];
+  if (!t) return;
+  t[field] = field === "name" ? value : (parseFloat(value) || 0);
+  // TL vàng thực (net) = TL luôn hột (gross) − Hột (trừ hao), tự tính lại.
+  t.weight = Math.max(0, (t.grossWeight || 0) - (t.stoneWeight || 0));
+  t.conv99 = t.weight * ((t.purity || 0) / 99);
+  const netCell = document.getElementById(`tradein-net-${idx}`);
+  if (netCell) netCell.textContent = t.weight.toFixed(3);
+  const cell = document.getElementById(`tradein-conv-${idx}`);
+  if (cell) cell.textContent = `${t.conv99.toFixed(3)} chỉ`;
+  calcTotal();
+};
+
+window.removeTradeInRow = function(idx) {
+  tradeIns.splice(idx, 1);
+  renderTradeIns();
+};
+
+// Quy về vàng 99: TL bán ra và mua vào đều quy đổi theo tuổi/99 rồi trừ ròng cho
+// nhau trước (goldRemaining99); phần này mới chọn quy ra tiền (goldToMoney99, mặc
+// định = toàn bộ còn lại nhưng có thể sửa để giữ một phần làm nợ vàng riêng).
+window.onGoldToMoneyInput = function(value) {
+  goldToMoneyDirty = value !== "";
+  calcTotal();
+};
+
+window.onPayAmountInput = function(value) {
+  payAmountDirty = value !== "";
+  calcTotal();
+};
+
+window.calcTotal = function() {
+  const goldPrice99 = parseFloat(document.getElementById("gold-price-99")?.value) || 0;
+
+  const goldSold99 = cart
+    .filter(i => i.isMetal && i.metalType === "gold")
+    .reduce((s, i) => s + i.weight * i.qty * (i.purity / 99), 0)
+    + customItems
+    .filter(it => it.purity > 0 && it.weight > 0)
+    .reduce((s, it) => s + it.weight * it.qty * (it.purity / 99), 0);
+  const goldBought99 = tradeIns.reduce((s, t) => s + (t.weight || 0) * ((t.purity || 0) / 99), 0);
+  const goldRemaining99 = goldSold99 - goldBought99;
+
+  const gtmInput = document.getElementById("gold-to-money-99");
+  // Mặc định KHÔNG tự quy vàng còn lại ra tiền — để nguyên thành nợ vàng, nhân viên phải
+  // tự gõ số chỉ muốn quy ra tiền nếu khách có trả bớt bằng tiền mặt (khác với tiền hàng
+  // thường, vốn mặc định coi như khách trả đủ — xem onPayAmountInput/paid bên dưới).
+  if (!goldToMoneyDirty) gtmInput.value = goldRemaining99 ? "0" : "";
+  const goldToMoney99 = parseFloat(gtmInput.value) || 0;
+  const goldDebt99 = goldRemaining99 - goldToMoney99;
+  const goldMoneyValue = Math.round(goldToMoney99 * goldPrice99);
+
+  const hasGoldActivity = goldSold99 > 0 || goldBought99 > 0;
+  document.getElementById("gold-summary-block").classList.toggle("d-none", !hasGoldActivity);
+  document.getElementById("gold-money-row").classList.toggle("d-none", !hasGoldActivity);
+  document.getElementById("gold-sold-show").textContent = `${goldSold99.toFixed(3)} chỉ`;
+  document.getElementById("gold-bought-show").textContent = `${goldBought99.toFixed(3)} chỉ`;
+  document.getElementById("gold-remaining-show").textContent = `${goldRemaining99.toFixed(3)} chỉ`;
+  document.getElementById("gold-money-show").textContent = fmtVND(goldMoneyValue);
+
+  // Cộng dồn nợ vàng cũ (đã hiện lúc chọn khách) vào số nợ vàng cuối cùng, giống nợ tiền
+  // ở dưới — không đổi gold_debt_99 lưu vào đơn, chỉ gộp lúc hiển thị.
+  const oldGoldDebt99 = lastDebtData ? (lastDebtData.gold_debt_99 || 0) : 0;
+  const combinedGoldDebt99 = goldDebt99 + oldGoldDebt99;
+
+  const debtEl = document.getElementById("gold-debt-show");
+  debtEl.textContent = `${combinedGoldDebt99.toFixed(3)} chỉ`;
+  debtEl.className = "fw-bold " + (Math.abs(combinedGoldDebt99) < 0.0005 ? "text-success" : combinedGoldDebt99 > 0 ? "text-danger" : "text-primary");
+  const goldOldNoteEl = document.getElementById("gold-debt-old-note");
+  if (Math.abs(oldGoldDebt99) > 0.0005) {
+    goldOldNoteEl.textContent = `(gồm nợ cũ ${oldGoldDebt99.toFixed(3)} chỉ + toa này ${goldDebt99.toFixed(3)} chỉ)`;
+    goldOldNoteEl.classList.remove("d-none");
+  } else {
+    goldOldNoteEl.classList.add("d-none");
+  }
+
+  // Tạm tính gồm: hàng thường (giá đầy đủ) + bạc (giá đầy đủ) + vàng (chỉ tiền công,
+  // vì tiền vàng thật đã cộng riêng qua goldMoneyValue ở trên — tránh tính trùng) +
+  // mục tuỳ ý (giá/công tương tự, phần vàng của nó đã quy vào goldSold99 ở trên).
+  const subtotal    = cart.reduce((s, i) => s + i.qty * i.unitPrice, 0)
+                    + customItems.reduce((s, it) => s + it.qty * it.price, 0);
+  const preDiscount = subtotal + goldMoneyValue;
+  const ckPct       = parseFloat(document.getElementById("discount-pct").value) || 0;
+  const discount    = preDiscount * ckPct / 100;
+  const total       = preDiscount - discount;
+  const isRefund    = total < 0;
+  // Nợ cũ (tiền, đã hiện lúc chọn khách) — lấy sớm ở đây để dùng luôn cho "Tổng tiền thanh
+  // toán" bên dưới (= toa này + nợ cũ, có dấu) và cộng dồn "Còn nợ" cuối hàm.
+  const oldMoneyDebt = lastDebtData ? (lastDebtData.money_debt || 0) : 0;
+
+  document.getElementById("subtotal-show").textContent = fmtVND(subtotal);
+  document.getElementById("ck-pct").textContent        = `(${ckPct}%)`;
+  document.getElementById("discount-show").textContent = `- ${fmtVND(discount)}`;
+
+  document.getElementById("total-label").textContent = isRefund ? "Tiệm cần hoàn khách:" : "Tổng cộng:";
+  document.getElementById("total-show").textContent   = fmtVND(Math.abs(total));
+  document.getElementById("refund-note").classList.toggle("d-none", !isRefund);
+
+  // Nợ cũ + Tổng tiền thanh toán: luôn hiện (kể cả 0đ/không nợ), số có dấu trực tiếp
+  // (âm = tiệm đang dư/nợ khách) — không gộp khoản khách trả hôm nay, đó là bước sau
+  // ("Còn nợ" ở cột thanh toán) để tách rõ "tổng phải thu" và "còn thiếu sau khi thu".
+  const grandTotal = total + oldMoneyDebt;
+  const oldDebtMoneyEl = document.getElementById("old-debt-money-show");
+  oldDebtMoneyEl.textContent = fmtVND(oldMoneyDebt);
+  oldDebtMoneyEl.className = oldMoneyDebt === 0 ? "" : (oldMoneyDebt > 0 ? "text-danger" : "text-primary");
+  document.getElementById("grand-total-show").textContent = fmtVND(grandTotal);
+
+  document.getElementById("pay-section-label").textContent = isRefund ? "Đã hoàn khách" : "Thanh toán ngay";
+  document.getElementById("pay-amount").placeholder = isRefund ? "Để trống nếu chưa hoàn gì" : "Để trống nếu khách chưa trả gì";
+
+  // Mặc định coi như khách trả đủ tiền hàng của toa này (khác với vàng — mặc định để
+  // nợ) — nhân viên tự sửa số nếu khách chỉ trả một phần hoặc chưa trả gì. Ô "Số tiền"
+  // luôn nhập số dương trên giao diện — chỉ đổi dấu khi gửi lên server.
+  const payAmountInput = document.getElementById("pay-amount");
+  if (!payAmountDirty) payAmountInput.value = Math.abs(total) ? Math.round(Math.abs(total)) : "";
+  const paid = Math.abs(parseInt(payAmountInput.value) || 0);
+  const debtThisOrder = Math.max(0, Math.abs(total) - paid); // độ lớn còn lại của RIÊNG toa này
+
+  // Cộng dồn nợ cũ vào số "Còn nợ" cuối cùng bằng số CÓ DẤU rồi mới lấy độ lớn — không được
+  // cộng 2 độ lớn (luôn dương) của 2 chiều ngược nhau lại với nhau (VD nợ cũ khách nợ tiệm
+  // nhưng toa này tiệm nợ khách) vì sẽ ra sai hẳn, có thể đảo chiều ai nợ ai — đúng bug thật
+  // đã gặp khi trước đây loại hẳn toa hoàn tiền ra khỏi việc cộng dồn để né lỗi này.
+  // Quy ước dấu khớp với API /api/customers/:id/debt: dương = khách nợ tiệm, âm = tiệm nợ khách.
+  const paidSigned = isRefund ? -paid : paid;
+  const thisOrderNet = total - paidSigned;
+  const combinedNet = thisOrderNet + oldMoneyDebt;
+  const debt = Math.abs(combinedNet);
+
+  document.getElementById("debt-label").textContent = combinedNet >= 0 ? "Còn nợ (kể cả nợ cũ):" : "Tiệm còn nợ khách (kể cả nợ cũ):";
+  document.getElementById("debt-show").textContent = fmtVND(debt);
+  document.getElementById("debt-show").style.color = debt > 0 ? "#dc2626" : "#16a34a";
+  const oldNoteEl = document.getElementById("debt-old-note");
+  if (oldMoneyDebt !== 0) {
+    oldNoteEl.textContent = `(gồm nợ cũ ${oldMoneyDebt > 0 ? "" : "tiệm nợ khách "}${fmtVND(Math.abs(oldMoneyDebt))} + toa này ${isRefund ? "tiệm nợ khách " : ""}${fmtVND(Math.abs(thisOrderNet))})`;
+    oldNoteEl.classList.remove("d-none");
+  } else {
+    oldNoteEl.classList.add("d-none");
+  }
+
+  // Dòng tổng dưới từng bảng (số món, TL vàng+hột/hột/vàng, quy 99, thành tiền) — để
+  // tiện đối chiếu ngay khi đang nhập, khỏi cuộn xuống khung tổng kết bên dưới.
+  const wsGoldRows = cart.filter(i => i.isMetal && i.metalType === "gold");
+  document.getElementById("ws-total-qty").textContent   = cart.reduce((s, i) => s + i.qty, 0);
+  document.getElementById("ws-total-gross").textContent = wsGoldRows.reduce((s, i) => s + (i.grossWeight || 0) * i.qty, 0).toFixed(3);
+  document.getElementById("ws-total-stone").textContent = wsGoldRows.reduce((s, i) => s + (i.stoneWeight || 0) * i.qty, 0).toFixed(3);
+  document.getElementById("ws-total-net").textContent   = wsGoldRows.reduce((s, i) => s + i.weight * i.qty, 0).toFixed(3);
+  document.getElementById("ws-total-conv").textContent  = wsGoldRows.reduce((s, i) => s + i.weight * i.qty * (i.purity / 99), 0).toFixed(3);
+  document.getElementById("ws-total-money").textContent = fmtVND(cart.reduce((s, i) => s + i.qty * i.unitPrice, 0));
+
+  const ciGoldRows = customItems.filter(it => it.purity > 0 && it.weight > 0);
+  document.getElementById("ci-total-qty").textContent   = customItems.reduce((s, it) => s + it.qty, 0);
+  document.getElementById("ci-total-gross").textContent = ciGoldRows.reduce((s, it) => s + (it.grossWeight || 0) * it.qty, 0).toFixed(3);
+  document.getElementById("ci-total-stone").textContent = ciGoldRows.reduce((s, it) => s + (it.stoneWeight || 0) * it.qty, 0).toFixed(3);
+  document.getElementById("ci-total-net").textContent   = ciGoldRows.reduce((s, it) => s + it.weight * it.qty, 0).toFixed(3);
+  document.getElementById("ci-total-conv").textContent  = ciGoldRows.reduce((s, it) => s + it.weight * it.qty * (it.purity / 99), 0).toFixed(3) + " chỉ";
+  document.getElementById("ci-total-money").textContent = fmtVND(customItems.reduce((s, it) => s + it.qty * it.price, 0));
+
+  document.getElementById("ti-total-gross").textContent = tradeIns.reduce((s, t) => s + (t.grossWeight || 0), 0).toFixed(3);
+  document.getElementById("ti-total-stone").textContent = tradeIns.reduce((s, t) => s + (t.stoneWeight || 0), 0).toFixed(3);
+  document.getElementById("ti-total-net").textContent   = tradeIns.reduce((s, t) => s + (t.weight || 0), 0).toFixed(3);
+  document.getElementById("ti-total-conv").textContent  = goldBought99.toFixed(3) + " chỉ";
+};
+
+// ── KHÁCH HÀNG AUTOCOMPLETE ──────────────────────────────
+const custSearch = document.getElementById("cust-search");
+const custAC     = document.getElementById("cust-ac");
+
+custSearch.addEventListener("input", async function() {
+  const term = this.value.trim();
+  if (term.length < 2) { custAC.classList.add("d-none"); return; }
+  try {
+    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}`);
+    custAC.innerHTML = customers.slice(0, 6).map(c =>
+      `<div class="ac-item" onclick='selectCustomer("${c.id}","${c.name}","${c.phone||""}")'>${c.name} <span class="text-muted">${c.phone||""}</span></div>`
+    ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
+    custAC.classList.remove("d-none");
+  } catch {}
+});
+document.addEventListener("click", e => { if (!custSearch.contains(e.target)) custAC.classList.add("d-none"); });
+
+window.selectCustomer = function(id, name, phone) {
+  document.getElementById("cust-id").value = id;
+  custSearch.value = `${name}${phone ? " — " + phone : ""}`;
+  document.getElementById("cust-info").textContent = `✓ Khách: ${name}`;
+  custAC.classList.add("d-none");
+  loadCustomerDebt(id, name);
+}
+
+// Tra cứu nhanh công nợ cũ (tiền + vàng quy 99) ngay khi chọn khách — trước đây phải
+// mở riêng trang Khách hàng/Danh sách đơn mới xem được, bất tiện khi đang lập hoá đơn.
+let lastDebtData = null;
+async function loadCustomerDebt(custId, custName) {
+  const box = document.getElementById("cust-debt");
+  box.innerHTML = `<span class="text-muted">Đang tra cứu công nợ...</span>`;
+  try {
+    const data = await api.get(`/api/customers/${custId}/debt`);
+    lastDebtData = { ...data, custName };
+    const hasMoneyDebt = data.money_debt !== 0;
+    const hasGoldDebt  = Math.abs(data.gold_debt_99) > 0.0005;
+    // Luôn hiện nút mở modal công nợ, kể cả khi khách chưa có nợ gì — không thì khách mới
+    // tạo (chưa có nợ) sẽ không có cách nào bấm vào để NHẬP nợ cũ thủ công sau này nữa,
+    // vì trước đây nút "Chi tiết" chỉ hiện khi ĐÃ có nợ (đúng lỗ hổng đã gặp).
+    if (!hasMoneyDebt && !hasGoldDebt) {
+      box.innerHTML = `<span class="text-success">✓ Không có nợ cũ</span>
+        <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="openCustomerDebtModal()">+ Thêm nợ</button>`;
+      return;
+    }
+    // Dấu: DƯƠNG = khách nợ tiệm, ÂM = tiệm nợ khách (xem functions/api/customers/[id]/debt.js) —
+    // luôn ghi rõ chiều bằng chữ, không chỉ dựa vào dấu trừ trước số (dễ đọc sót).
+    const parts = [];
+    if (hasMoneyDebt) parts.push(`${data.money_debt > 0 ? "Nợ tiền" : "Tiệm nợ khách"}: <strong>${fmtVND(Math.abs(data.money_debt))}</strong>`);
+    if (hasGoldDebt)  parts.push(`${data.gold_debt_99 > 0 ? "Nợ vàng" : "Tiệm nợ khách vàng"}: <strong>${Math.abs(data.gold_debt_99).toFixed(3)} chỉ</strong>`);
+    box.innerHTML = `<span class="text-danger">⚠️ ${parts.join(" · ")}</span>
+      <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="openCustomerDebtModal()">Chi tiết</button>`;
+  } catch {
+    box.innerHTML = "";
+  }
+}
+
+window.openCustomerDebtModal = function() {
+  if (!lastDebtData) return;
+  document.getElementById("debt-cust-name").textContent = lastDebtData.custName || "";
+  document.getElementById("debt-modal-money-label").textContent = lastDebtData.money_debt >= 0 ? "Tổng nợ tiền (khách nợ)" : "Tổng tiền tiệm nợ khách";
+  document.getElementById("debt-modal-money").textContent = fmtVND(Math.abs(lastDebtData.money_debt));
+  document.getElementById("debt-modal-money").className = "h3 mb-0 " + (lastDebtData.money_debt === 0 ? "text-success" : "text-danger");
+  document.getElementById("debt-modal-gold-label").textContent = lastDebtData.gold_debt_99 >= 0 ? "Tổng nợ vàng (khách nợ, quy 99)" : "Tổng vàng tiệm nợ khách (quy 99)";
+  document.getElementById("debt-modal-gold").textContent = `${Math.abs(lastDebtData.gold_debt_99).toFixed(3)} chỉ`;
+  document.getElementById("debt-modal-gold").className = "h3 mb-0 " + (Math.abs(lastDebtData.gold_debt_99) > 0.0005 ? "text-danger" : "text-success");
+  // "Thu nợ vàng" chỉ có ý nghĩa khi khách đang thật sự NỢ vàng (>0) — nợ âm nghĩa là
+  // tiệm đang nợ khách vàng, không phải chiều "thu" được ở đây.
+  document.getElementById("gold-collect-section").classList.toggle("d-none", !(lastDebtData.gold_debt_99 > 0.0005));
+
+  const typeLabel = t => t === "wholesale" ? "Bán sỉ" : "Bán lẻ";
+  const statusLabel = s => ({pending:"Chờ TT", completed:"Hoàn thành"}[s] || s);
+  document.getElementById("debt-modal-rows").innerHTML = lastDebtData.orders.length ? lastDebtData.orders.map(o => `
+    <tr>
+      <td class="fw-medium">${o.order_number}</td>
+      <td>${typeLabel(o.order_type)}</td>
+      <td class="text-muted">${new Date(o.created_at).toLocaleDateString("vi-VN")}</td>
+      <td class="text-end">${fmtVND(o.total)}</td>
+      <td class="text-end">${fmtVND(o.paid)}</td>
+      <td class="text-end ${o.money_debt !== 0 ? "text-danger fw-bold" : "text-muted"}">${o.money_debt !== 0 ? fmtVND(o.money_debt_direction === "shop_owes" ? -o.money_debt : o.money_debt) : "—"}</td>
+      <td class="text-end ${Math.abs(o.gold_debt_99) > 0.0005 ? "text-danger fw-bold" : "text-muted"}">${Math.abs(o.gold_debt_99) > 0.0005 ? o.gold_debt_99.toFixed(3) + " chỉ" : "—"}</td>
+      <td>${statusLabel(o.status)}</td>
+      <td><a href="/orders-list.html?open=${o.id}&include_quick=1" target="_blank" class="btn btn-sm btn-ghost-secondary">Xem</a></td>
+    </tr>`).join("") : `<tr><td colspan="9" class="text-muted text-center py-3">Không có đơn nào góp phần vào công nợ</td></tr>`;
+
+  const adjustments = lastDebtData.adjustments || [];
+  document.getElementById("debt-adjustment-rows").innerHTML = adjustments.length ? adjustments.map(a => `
+    <tr>
+      <td class="text-muted">${new Date(a.created_at).toLocaleDateString("vi-VN")}</td>
+      <td>${a.note || "<span class='text-muted'>—</span>"}</td>
+      <td class="text-end ${a.money_amount !== 0 ? (a.money_amount > 0 ? "text-danger" : "text-success") + " fw-bold" : "text-muted"}">${a.money_amount !== 0 ? fmtVND(a.money_amount) : "—"}</td>
+      <td class="text-end ${Math.abs(a.gold_amount_99) > 0.0005 ? (a.gold_amount_99 > 0 ? "text-danger" : "text-success") + " fw-bold" : "text-muted"}">${Math.abs(a.gold_amount_99) > 0.0005 ? a.gold_amount_99.toFixed(3) + " chỉ" : "—"}</td>
+      <td><button class="btn btn-sm btn-ghost-danger" onclick="removeDebtAdjustment('${a.id}')">✕</button></td>
+    </tr>`).join("") : `<tr><td colspan="5" class="text-muted text-center py-2">Chưa có bút toán nào</td></tr>`;
+
+  // getOrCreateInstance thay vì `new Modal()` — hàm này bị gọi lại để refresh dữ liệu
+  // trong lúc modal ĐANG mở (VD sau khi thêm/xoá bút toán nợ, thu nợ vàng), `new
+  // Modal().show()` lặp lại sẽ tạo thêm backdrop mới, để lại lớp overlay mờ kẹt trên
+  // trang sau khi đóng modal.
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-customer-debt")).show();
+};
+
+// "Thu nợ vàng" — về bản chất là 1 bút toán điều chỉnh nợ (gold_amount_99 âm) giống hệt
+// cơ chế "Điều chỉnh nợ nhập tay" bên dưới, chỉ khác là có UX hướng dẫn rõ + cảnh báo nếu
+// nhập vượt số đang nợ, để tránh gõ nhầm — vẫn hiện đầy đủ trong lịch sử bút toán, xoá được.
+window.collectGoldDebt = async function() {
+  const custId = document.getElementById("cust-id").value;
+  if (!custId) return alert("Chưa chọn khách hàng");
+  const amount = parseFloat(document.getElementById("gold-collect-amount").value) || 0;
+  if (amount <= 0) return alert("Nhập số chỉ thu được (lớn hơn 0)");
+  const currentGoldDebt = lastDebtData?.gold_debt_99 || 0;
+  if (amount > currentGoldDebt + 0.0005) {
+    if (!confirm(`Khách chỉ đang nợ ${currentGoldDebt.toFixed(3)} chỉ, số bạn nhập (${amount.toFixed(3)} chỉ) lớn hơn số đang nợ.\n\nVẫn ghi nhận?`)) return;
+  }
+  const note = document.getElementById("gold-collect-note").value.trim();
+  try {
+    await api.post(`/api/customers/${custId}/debt`, {
+      money_amount: 0, gold_amount_99: -amount, note: note || "Thu nợ vàng",
+    });
+    document.getElementById("gold-collect-amount").value = "";
+    document.getElementById("gold-collect-note").value = "";
+    await loadCustomerDebt(custId, lastDebtData.custName);
+    openCustomerDebtModal();
+  } catch (err) { alert(err.message); }
+};
+
+window.addDebtAdjustment = async function() {
+  const custId = document.getElementById("cust-id").value;
+  if (!custId) return alert("Chưa chọn khách hàng");
+  const moneyAmount = parseInt(document.getElementById("adj-money").value) || 0;
+  const goldAmount  = parseFloat(document.getElementById("adj-gold").value) || 0;
+  const note        = document.getElementById("adj-note").value.trim();
+  if (!moneyAmount && !goldAmount) return alert("Cần nhập ít nhất 1 trong 2: nợ tiền hoặc nợ vàng");
+  try {
+    await api.post(`/api/customers/${custId}/debt`, {
+      money_amount: moneyAmount, gold_amount_99: goldAmount, note: note || null,
+    });
+    document.getElementById("adj-money").value = "";
+    document.getElementById("adj-gold").value = "";
+    document.getElementById("adj-note").value = "";
+    await loadCustomerDebt(custId, lastDebtData.custName);
+    openCustomerDebtModal();
+  } catch (err) { alert(err.message); }
+};
+
+window.removeDebtAdjustment = async function(adjId) {
+  if (!confirm("Xoá bút toán công nợ này?")) return;
+  const custId = document.getElementById("cust-id").value;
+  try {
+    await api.delete(`/api/debt-adjustments/${adjId}`);
+    await loadCustomerDebt(custId, lastDebtData.custName);
+    openCustomerDebtModal();
+  } catch (err) { alert(err.message); }
+};
+
+window.openQuickCustomer = function() {
+  document.getElementById("qc-type-individual").checked = true;
+  onQcTypeChange();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-quick-customer")).show();
+};
+
+// "Cá nhân" ⇄ "Doanh nghiệp" — đổi nhãn, ẩn CCCD, hiện ô MST + nút tra cứu tự động
+// điền tên/địa chỉ (giống trang Khách hàng chính).
+window.onQcTypeChange = function() {
+  const isBiz = document.getElementById("qc-type-business").checked;
+  document.getElementById("qc-tax-section").classList.toggle("d-none", !isBiz);
+  document.getElementById("qc-idcard-section").classList.toggle("d-none", isBiz);
+  document.getElementById("qc-name-label").textContent = isBiz ? "Tên công ty" : "Họ tên";
+};
+
+window.lookupQcTaxCode = async function() {
+  const code = document.getElementById("qc-taxcode").value.trim();
+  const statusEl = document.getElementById("qc-tax-status");
+  if (!code) return alert("Nhập mã số thuế trước");
+  const btn = document.getElementById("btn-qc-tax-lookup");
+  btn.disabled = true; btn.textContent = "Đang tra...";
+  statusEl.innerHTML = "";
+  try {
+    const data = await api.get(`/api/tax-lookup/${encodeURIComponent(code)}`);
+    document.getElementById("qc-name").value = data.name;
+    document.getElementById("qc-address").value = data.address || "";
+    statusEl.innerHTML = `<span class="text-success">✓ ${data.name}${data.status ? ` — ${data.status}` : ""}</span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-danger">${err.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Tra cứu";
+  }
+};
+
+window.saveQuickCustomer = async function() {
+  const isBiz    = document.getElementById("qc-type-business").checked;
+  const name     = document.getElementById("qc-name").value.trim();
+  const phone    = document.getElementById("qc-phone").value.trim();
+  const id_card  = document.getElementById("qc-idcard").value.trim();
+  const address  = document.getElementById("qc-address").value.trim();
+  const tax_code = isBiz ? document.getElementById("qc-taxcode").value.trim() : "";
+  if (!name) return alert(isBiz ? "Tên công ty là bắt buộc" : "Tên là bắt buộc");
+  if (isBiz && !tax_code) return alert("Mã số thuế là bắt buộc với khách doanh nghiệp");
+  const debtMoney = parseInt(document.getElementById("qc-debt-money").value) || 0;
+  const debtGold  = parseFloat(document.getElementById("qc-debt-gold").value) || 0;
+  try {
+    const c = await api.post("/api/customers", { name, phone, id_card, address, is_business: isBiz, tax_code });
+    // Nợ cũ nhập lúc tạo khách (nếu có) — ghi thành bút toán điều chỉnh nợ ngay, để khi
+    // selectCustomer() bên dưới tra công nợ thì đã thấy đúng số này, khỏi phải tạo khách
+    // xong rồi mới mở "Chi tiết công nợ" nhập lại riêng.
+    if (debtMoney || debtGold) {
+      await api.post(`/api/customers/${c.id}/debt`, {
+        money_amount: debtMoney, gold_amount_99: debtGold, note: "Nợ cũ nhập lúc tạo khách",
+      }).catch(err => alert("Tạo khách thành công nhưng ghi nợ cũ thất bại: " + err.message));
+    }
+    selectCustomer(c.id, c.name, c.phone);
+    bootstrap.Modal.getInstance(document.getElementById("modal-quick-customer")).hide();
+    document.getElementById("qc-name").value = "";
+    document.getElementById("qc-phone").value = "";
+    document.getElementById("qc-idcard").value = "";
+    document.getElementById("qc-address").value = "";
+    document.getElementById("qc-taxcode").value = "";
+    document.getElementById("qc-tax-status").innerHTML = "";
+    document.getElementById("qc-debt-money").value = "";
+    document.getElementById("qc-debt-gold").value = "";
+  } catch (err) { alert(err.message); }
+};
+
+// ── SẢN PHẨM AUTOCOMPLETE ────────────────────────────────
+const prodSearch = document.getElementById("prod-search");
+const prodAC     = document.getElementById("prod-ac");
+
+prodSearch.addEventListener("input", async function() {
+  const term = this.value.trim();
+  if (term.length < 2) { prodAC.classList.add("d-none"); return; }
+  try {
+    const { products } = await api.get(`/api/products?search=${encodeURIComponent(term)}&status=active`);
+    prodAC.innerHTML = products.slice(0, 8).map(p =>
+      `<div class="ac-item" onclick='addProduct("${p.id}","${p.name}","${p.sku}")'>${p.name} <span class="text-muted">${p.sku} — ${fmtVND(p.base_price)}</span></div>`
+    ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
+    prodAC.classList.remove("d-none");
+  } catch {}
+});
+document.addEventListener("click", e => { if (!prodSearch.contains(e.target)) prodAC.classList.add("d-none"); });
+
+window.addProduct = async function(productId, name, sku) {
+  prodSearch.value = "";
+  prodAC.classList.add("d-none");
+  try {
+    const { product, variants } = await api.get(`/api/products/${productId}`);
+    if (!variants.length) return alert("Sản phẩm chưa có variant");
+    const v = variants[0];
+
+    // Vàng/bạc: giá phụ thuộc giá thị trường hôm nay — thêm thẳng vào bảng với các ô
+    // trọng lượng/tuổi/giá/công chỉnh trực tiếp trên dòng, không dùng giá cố định.
+    const isGold   = product.product_type === "gold"   && (v.gold_gross > 0 || v.gold_net > 0);
+    const isSilver = product.product_type === "silver" && (v.silver_gross > 0 || v.silver_net > 0);
+
+    if (isGold || isSilver) {
+      const type       = isGold ? "gold" : "silver";
+      const purity     = isGold ? (v.gold_type_purity || 99) : (parseFloat(v.silver_purity) || 999);
+      const basePurity = isGold ? 99 : 999; // mốc quy đổi: vàng 99 / bạc 999
+      const gross      = parseFloat(isGold ? v.gold_gross : v.silver_gross) || 0;
+      const stone      = parseFloat(isGold ? v.gold_stone : v.silver_stone) || 0;
+      const weight     = parseFloat(isGold ? v.gold_net   : v.silver_net)   || Math.max(0, gross - stone);
+      const fee        = parseFloat(isGold ? v.gold_making_fee : v.silver_making_fee) || 0;
+      const unit       = isGold ? "chỉ" : "gram";
+
+      if (isGold) {
+        // Vàng: TL vàng+hột (gross) và TL hột (trừ hao) là 2 ô nhập trực tiếp trên
+        // toa — TL vàng thực (net) luôn = gross − hột, tính lại tự động (không dùng
+        // gold_net lưu sẵn trong danh mục nữa để tránh lệch với gross/hột hiển thị).
+        // Không nhập giá riêng theo dòng — tiền vàng tính gộp ở cấp toa qua giá vàng
+        // 99 chung. unitPrice ở đây chỉ là tiền công của món này.
+        const grossWeight = gross || weight;
+        const stoneWeight = stone;
+        cart.push({
+          variantId: v.id, sku: v.sku || sku, name, qty: 1,
+          isMetal: true, metalType: "gold", purity, basePurity,
+          grossWeight, stoneWeight, weight: Math.max(0, grossWeight - stoneWeight),
+          fee, unit, unitPrice: fee,
+        });
+      } else {
+        const pricePerUnit = lastMetalPrice.silver || 0;
+        const unitPrice = Math.round(weight * (purity / basePurity) * pricePerUnit + fee);
+        cart.push({
+          variantId: v.id, sku: v.sku || sku, name, qty: 1,
+          isMetal: true, metalType: "silver", purity, basePurity, weight, pricePerUnit, fee, unit,
+          unitPrice,
+        });
+      }
+      renderCart();
+      return;
+    }
+
+    const existing = cart.find(c => c.variantId === v.id && !c.isMetal);
+    if (existing) { existing.qty++; }
+    else {
+      cart.push({ variantId: v.id, sku: v.sku || sku, name, qty: 1, unitPrice: v.price || 0 });
+    }
+    renderCart();
+  } catch (err) { alert(err.message); }
+};
+
+// ── TẠO ĐƠN ─────────────────────────────────────────────
+// Bấm "Tạo đơn & In A4" chỉ tính toán + hiện modal xác nhận (số tiền/vàng thanh toán,
+// nợ còn lại in đậm) — việc lưu + in thật sự dời qua submitOrderConfirmed() sau khi
+// nhân viên bấm xác nhận, tránh lưu nhầm khi chưa kiểm tra kỹ số liệu.
+let pendingOrderPayload = null;
+let pendingOrderMeta = null;
+
+// Tính toán + gói payload gửi lên /api/orders — dùng chung cho cả 2 luồng lưu: "Tạo đơn &
+// In A4" (createWholesaleOrder, có modal xác nhận + in) và "Lưu tạm" (saveWholesaleDraft,
+// lưu thẳng thành nháp không cần xác nhận/in). Trả về null (đã tự alert lỗi) nếu chưa hợp lệ.
+function buildWholesalePayload() {
+  const custId = document.getElementById("cust-id").value;
+  if (!custId) { alert("⚠️ Cần chọn khách hàng cho đơn bán sỉ"); return null; }
+  // Toa chỉ có hàng cũ khách trả (mua vào), không bán món nào mới, vẫn là giao dịch hợp
+  // lệ (mua vàng cũ của khách) — chỉ chặn khi CẢ giỏ hàng lẫn hàng cũ đều trống.
+  if (!cart.length && !customItems.length && !tradeIns.length) { alert("Giỏ hàng và hàng cũ khách trả đều đang trống"); return null; }
+  if (customItems.some(it => !it.name.trim())) { alert("⚠️ Mỗi dòng mục tuỳ ý cần có tên hàng"); return null; }
+
+  const goldPrice99 = parseFloat(document.getElementById("gold-price-99")?.value) || 0;
+  const goldSold99 = cart
+    .filter(i => i.isMetal && i.metalType === "gold")
+    .reduce((s, i) => s + i.weight * i.qty * (i.purity / 99), 0)
+    + customItems
+    .filter(it => it.purity > 0 && it.weight > 0)
+    .reduce((s, it) => s + it.weight * it.qty * (it.purity / 99), 0);
+  const goldBought99 = tradeIns.reduce((s, t) => s + (t.weight || 0) * ((t.purity || 0) / 99), 0);
+  const goldToMoney99 = parseFloat(document.getElementById("gold-to-money-99")?.value) || 0;
+  // Giá vàng 99 chỉ dùng để quy phần "Quy ra tiền" ra đồng — nếu để nguyên hết thành nợ
+  // vàng (Quy ra tiền = 0) thì không cần giá cũng tạo đơn được, khỏi phải nhập cho có.
+  if (Math.abs(goldToMoney99) > 0.0005 && goldPrice99 <= 0) { alert("⚠️ Cần nhập giá vàng 99/chỉ để quy phần vàng ra tiền"); return null; }
+  const makingFeeTotal = cart
+    .filter(i => i.isMetal && i.metalType === "gold")
+    .reduce((s, i) => s + i.fee * i.qty, 0)
+    + customItems
+    .filter(it => it.purity > 0 && it.weight > 0)
+    .reduce((s, it) => s + it.price * it.qty, 0);
+  const goldMoneyValue = Math.round(goldToMoney99 * goldPrice99);
+
+  const ckPct     = parseFloat(document.getElementById("discount-pct").value) || 0;
+  const subtotal  = cart.reduce((s, i) => s + i.qty * i.unitPrice, 0)
+                  + customItems.reduce((s, it) => s + it.qty * it.price, 0);
+  const discount  = Math.round((subtotal + goldMoneyValue) * ckPct / 100);
+  const rawPayAmt = Math.abs(parseInt(document.getElementById("pay-amount").value) || 0);
+
+  // Lưu lại breakdown tuổi/TL vàng+hột/hột/TL vàng thực theo từng dòng (metal_details)
+  // để xem lại/in hoá đơn sau này vẫn hiện đúng cột trừ hao, không chỉ còn mỗi tiền công.
+  const items = cart.map(i => ({
+    product_variant_id: i.variantId || null,
+    item_name:  i.variantId ? undefined : i.name,
+    quantity:   i.qty,
+    unit_price: i.unitPrice,
+    discount:   0,
+    metal_details: i.isMetal && i.metalType === "gold" ? {
+      metalType: "gold", purity: i.purity, basePurity: i.basePurity,
+      grossWeight: i.grossWeight, stoneWeight: i.stoneWeight, netWeight: i.weight,
+      unit: i.unit, conv99: i.weight * i.qty * (i.purity / 99),
+    } : null,
+  })).concat(customItems.map(it => ({
+    product_variant_id: null,
+    item_name:  it.name,
+    quantity:   it.qty,
+    unit_price: it.price,
+    discount:   0,
+    metal_details: it.purity > 0 && it.weight > 0 ? {
+      metalType: "gold", purity: it.purity, basePurity: 99,
+      grossWeight: it.grossWeight, stoneWeight: it.stoneWeight, netWeight: it.weight,
+      unit: "chỉ", conv99: it.weight * it.qty * (it.purity / 99),
+    } : null,
+  })));
+
+  const isEditing = !!editOrderId;
+
+  // Nợ cũ: khi đang SỬA hoá đơn nháp, giữ nguyên snapshot đã chốt lúc tạo đơn ban đầu
+  // (editingOldDebt) thay vì lấy lastDebtData hiện tại — vì lastDebtData lúc này có thể
+  // đã bao gồm luôn chính đơn đang sửa (do API công nợ cộng dồn mọi đơn pending), nếu
+  // lấy lại sẽ bị tính trùng nợ của chính đơn này vào "nợ cũ" của nó.
+  const oldMoneyDebt   = isEditing ? editingOldDebt.money_debt      : (lastDebtData?.money_debt || 0);
+  const oldGoldDebt99  = isEditing ? editingOldDebt.gold_debt_99    : (lastDebtData?.gold_debt_99 || 0);
+
+  const payload = {
+    customer_id: custId,
+    items,
+    discount,
+    notes: document.getElementById("notes").value.trim() || null,
+    gold_price_99: goldPrice99,
+    gold_sold_99: goldSold99,
+    gold_bought_99: goldBought99,
+    gold_to_money_99: goldToMoney99,
+    making_fee_total: makingFeeTotal,
+    trade_in_details: tradeIns.length ? tradeIns : null,
+    old_money_debt: oldMoneyDebt,
+    old_gold_debt_99: oldGoldDebt99,
+  };
+  if (!isEditing) { payload.order_type = "wholesale"; payload.is_quick = isQuickMode; }
+
+  return { payload, rawPayAmt, isEditing, subtotal, goldMoneyValue, discount, goldSold99, goldBought99, goldToMoney99, oldMoneyDebt, oldGoldDebt99 };
+}
+
+window.createWholesaleOrder = async function() {
+  const built = buildWholesalePayload();
+  if (!built) return;
+  const { payload, rawPayAmt, isEditing, subtotal, goldMoneyValue, discount, goldSold99, goldBought99, goldToMoney99, oldMoneyDebt, oldGoldDebt99 } = built;
+
+  pendingOrderPayload = payload;
+  pendingOrderMeta = { isEditing, rawPayAmt };
+
+  // Xem trước đúng số sẽ xảy ra sau khi lưu — công thức khớp hệt backend (createOrder/
+  // editDraftOrder) để không lệch với số thật lúc lưu xong.
+  const total = subtotal + goldMoneyValue - discount;
+  const isRefundPreview = total < 0;
+  // Cộng dồn nợ cũ + toa này bằng số CÓ DẤU trước, chỉ lấy độ lớn lúc hiển thị — không được
+  // cộng 2 độ lớn của 2 chiều ngược nhau (xem giải thích chi tiết trong calcTotal() ở trên).
+  const paidSignedPreview = isRefundPreview ? -rawPayAmt : rawPayAmt;
+  const thisOrderNetPreview = total - paidSignedPreview;
+  const combinedNetPreview = thisOrderNetPreview + oldMoneyDebt;
+  const previewMoneyDebt = Math.abs(combinedNetPreview);
+  const previewGoldDebt = (goldSold99 - goldBought99) - goldToMoney99 + oldGoldDebt99;
+  const hasGoldActivity = goldSold99 > 0 || goldBought99 > 0;
+
+  document.getElementById("cf-cust-name").textContent = lastDebtData?.custName || custSearch.value || "";
+  document.getElementById("cf-subtotal").textContent = fmtVND(subtotal);
+  document.getElementById("cf-gold-money-row").classList.toggle("d-none", !hasGoldActivity);
+  document.getElementById("cf-gold-money").textContent = fmtVND(goldMoneyValue);
+  document.getElementById("cf-discount-row").classList.toggle("d-none", discount <= 0);
+  document.getElementById("cf-discount").textContent = "- " + fmtVND(discount);
+  document.getElementById("cf-total").textContent = (isRefundPreview ? "Tiệm cần hoàn: " : "") + fmtVND(Math.abs(total));
+  document.getElementById("cf-paid").textContent = fmtVND(rawPayAmt);
+  document.getElementById("cf-money-debt-label").textContent = combinedNetPreview >= 0 ? "Nợ tiền còn lại (kể cả nợ cũ)" : "Tiệm còn nợ khách (kể cả nợ cũ)";
+  const cfMoneyDebtEl = document.getElementById("cf-money-debt");
+  cfMoneyDebtEl.textContent = fmtVND(previewMoneyDebt);
+  cfMoneyDebtEl.className = "fs-3 fw-bold " + (previewMoneyDebt > 0 ? "text-danger" : "text-success");
+  document.getElementById("cf-gold-debt-row").classList.toggle("d-none", Math.abs(previewGoldDebt) <= 0.0005);
+  const cfGoldDebtEl = document.getElementById("cf-gold-debt");
+  cfGoldDebtEl.textContent = previewGoldDebt.toFixed(3) + " chỉ";
+  cfGoldDebtEl.className = "fs-3 fw-bold " + (Math.abs(previewGoldDebt) > 0.0005 ? "text-danger" : "text-success");
+  document.getElementById("cf-confirm-btn").textContent = isEditing ? "✓ Xác nhận & Cập nhật" : "✓ Xác nhận, Lưu & In";
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-confirm-order")).show();
+};
+
+window.submitOrderConfirmed = async function() {
+  bootstrap.Modal.getInstance(document.getElementById("modal-confirm-order"))?.hide();
+  const payload = pendingOrderPayload;
+  const meta = pendingOrderMeta;
+  if (!payload || !meta) return;
+  await doSubmitOrder(payload, { ...meta, print: true });
+};
+
+// "Lưu tạm — hoàn thành sau": lưu ngay thành hoá đơn nháp (is_quick=true — ẩn khỏi DS
+// chính, không trừ kho, vẫn lưu công nợ) mà KHÔNG cần hiện modal xác nhận số tiền/nợ hay
+// in hoá đơn ngay — dùng khi đơn còn thiếu thông tin (chưa chốt giá, khách chưa quyết),
+// nhân viên sửa/hoàn tất tiếp sau qua "Danh sách đơn" → "Sửa hoá đơn nháp".
+window.saveWholesaleDraft = async function() {
+  const built = buildWholesalePayload();
+  if (!built) return;
+  const { payload, isEditing } = built;
+  payload.is_quick = true;
+  // Không tự ghi nhận thanh toán khi "Lưu tạm", dù ô "Số tiền" đang có sẵn số (mặc định tự
+  // điền = tổng toa này) — nếu gửi kèm, /api/payments sẽ tự đánh dấu đơn "completed" ngay
+  // khi đã thu đủ, khoá luôn không cho "Sửa hoá đơn nháp" nữa (chỉ sửa được lúc status còn
+  // "pending"), phá luôn mục đích "lưu dở, hoàn thành sau". Muốn ghi nhận tiền đã thu thì
+  // dùng nút "Tạo đơn & In A4" (hoàn tất hẳn) hoặc "Thu thêm tiền" ở Danh sách đơn sau này.
+  await doSubmitOrder(payload, { isEditing, rawPayAmt: 0, print: false, draft: true });
+};
+
+async function doSubmitOrder(payload, meta) {
+  const { isEditing, rawPayAmt, print, draft } = meta;
+
+  const btn = document.getElementById("submit-order-btn");
+  const draftBtn = document.getElementById("save-draft-btn");
+  btn.disabled = true; draftBtn.disabled = true;
+  if (draft) draftBtn.textContent = "⏳ Đang lưu tạm...";
+  else btn.textContent = isEditing ? "⏳ Đang cập nhật..." : "⏳ Đang tạo...";
+
+  try {
+    const orderRes = isEditing
+      ? await api.put(`/api/orders/${editOrderId}`, payload)
+      : await api.post("/api/orders", payload);
+
+    // Thanh toán/hoàn tiền ngay nếu có — chỉ áp dụng lúc TẠO MỚI. Lúc sửa hoá đơn nháp
+    // không đụng tới payments (đã có luồng "Thu thêm tiền" riêng ở trang Danh sách đơn),
+    // tránh vô tình tạo thêm 1 khoản thu ngoài ý muốn khi chỉ đang chỉnh sửa nội dung.
+    if (!isEditing && rawPayAmt > 0) {
+      const isRefund = orderRes.total < 0;
+      await api.post("/api/payments", {
+        order_id:   orderRes.order_id || orderRes.id,
+        method:     document.getElementById("pay-method").value,
+        amount:     isRefund ? -rawPayAmt : rawPayAmt,
+      }).catch(() => {}); // Non-blocking
+    }
+
+    const orderId = orderRes.order_id || orderRes.id || editOrderId;
+
+    if (isEditing) {
+      alert(`✅ Đã cập nhật hoá đơn ${orderRes.order_number}.`);
+      location.href = `/orders-list.html?open=${orderId}&include_quick=1`;
+      return;
+    }
+
+    // In A4 ngay sau khi tạo — bỏ qua nếu chỉ "Lưu tạm" (đơn còn dở, chưa cần in).
+    if (print) printInvoiceA4(orderId, "wholesale");
+
+    const debtMsg = Math.abs(orderRes.gold_debt_99 || 0) > 0.0005
+      ? ` Nợ vàng còn lại: ${orderRes.gold_debt_99.toFixed(3)} chỉ.` : "";
+
+    // Reset form
+    cart = [];
+    tradeIns = [];
+    goldToMoneyDirty = false;
+    payAmountDirty = false;
+    document.getElementById("quick-mode-toggle").checked = false;
+    onQuickModeToggle(false);
+    renderCart();
+    renderTradeIns();
+    document.getElementById("cust-id").value = "";
+    custSearch.value = "";
+    document.getElementById("cust-info").textContent = "";
+    document.getElementById("cust-debt").innerHTML = "";
+    lastDebtData = null;
+    document.getElementById("pay-amount").value = "";
+    document.getElementById("discount-pct").value = "0";
+    document.getElementById("gold-price-99").value = "";
+    document.getElementById("notes").value = "";
+
+    alert(draft
+      ? `✅ Đã lưu tạm hoá đơn nháp ${orderRes.order_number}. Vào "Danh sách đơn" → "Sửa hoá đơn nháp" để hoàn thành sau.`
+      : `✅ Đã tạo đơn ${orderRes.order_number}.${debtMsg} Cửa sổ in đang mở...`);
+  } catch (err) {
+    alert("Lỗi: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = isEditing ? "💾 Cập nhật hoá đơn nháp" : "📄 Tạo đơn & In A4";
+    draftBtn.disabled = false; draftBtn.textContent = "💾 Lưu tạm — hoàn thành sau";
+    pendingOrderPayload = null;
+    pendingOrderMeta = null;
+  }
+};
+
+// ── SỬA HOÁ ĐƠN NHÁP (?edit=<id>) ────────────────────────
+let editOrderId = null;
+let editingOldDebt = null;
+
+async function loadOrderForEdit(orderId) {
+  let res;
+  try { res = await api.get(`/api/orders/${orderId}`); }
+  catch (err) { alert("Không tải được đơn hàng: " + err.message); return; }
+
+  const { order, items } = res;
+  if (!order.is_quick) { alert("Chỉ có thể sửa hoá đơn nháp."); return; }
+  if (order.status !== "pending") { alert("Hoá đơn đã đóng, không thể sửa."); return; }
+
+  editOrderId = orderId;
+  editingOldDebt = { money_debt: parseInt(order.old_money_debt) || 0, gold_debt_99: parseFloat(order.old_gold_debt_99) || 0 };
+
+  document.getElementById("page-title").textContent = "✏️ Sửa Hoá Đơn Nháp";
+  document.getElementById("page-subtitle").textContent = `Đang sửa đơn ${order.order_number} — lưu lại sẽ cập nhật đè lên nội dung cũ`;
+  const btn = document.getElementById("submit-order-btn");
+  btn.textContent = "💾 Cập nhật hoá đơn nháp";
+  // Đang sửa 1 đơn nháp sẵn có thì bản thân nút "Cập nhật" đã LÀ lưu tạm rồi (đơn vẫn giữ
+  // nguyên trạng thái nháp sau khi lưu) — ẩn nút "Lưu tạm" riêng để khỏi trùng lặp/gây rối.
+  document.getElementById("save-draft-btn").classList.add("d-none");
+
+  // Bật chế độ nháp (đơn đang sửa chắc chắn là nháp) để hiện khung "Mục tuỳ ý"
+  document.getElementById("quick-mode-toggle").checked = true;
+  onQuickModeToggle(true);
+
+  // Khách hàng — không gọi loadCustomerDebt() ở đây để khỏi ghi đè editingOldDebt phía
+  // trên bằng công nợ hiện tại (lúc này công nợ hiện tại đã bao gồm luôn chính đơn này).
+  // Khoá luôn không cho đổi khách khi đang sửa: đổi khách giữa chừng sẽ khiến snapshot
+  // "nợ cũ" (chốt 1 lần lúc mở form, thuộc về khách CŨ) bị gắn nhầm sang khách MỚI trên
+  // hoá đơn in — muốn đổi khách cho đúng, huỷ đơn nháp này và tạo lại đơn mới.
+  if (order.customer_id) {
+    document.getElementById("cust-id").value = order.customer_id;
+    custSearch.value = `${order.customer_name || ""}${order.customer_phone ? " — " + order.customer_phone : ""}`;
+    document.getElementById("cust-info").textContent = `✓ Khách: ${order.customer_name || ""}`;
+    lastDebtData = { money_debt: editingOldDebt.money_debt, gold_debt_99: editingOldDebt.gold_debt_99, custName: order.customer_name, orders: [], adjustments: [] };
+    const hasMoneyDebt = editingOldDebt.money_debt !== 0;
+    const hasGoldDebt  = Math.abs(editingOldDebt.gold_debt_99) > 0.0005;
+    document.getElementById("cust-debt").innerHTML = (hasMoneyDebt || hasGoldDebt)
+      ? `<span class="text-muted">Nợ cũ tại thời điểm lập đơn này: ${hasMoneyDebt ? fmtVND(editingOldDebt.money_debt) : ""} ${hasGoldDebt ? editingOldDebt.gold_debt_99.toFixed(3) + " chỉ" : ""}</span>`
+      : "";
+  }
+  custSearch.disabled = true;
+  document.getElementById("new-cust-btn").disabled = true;
+  document.getElementById("cust-info").innerHTML += ` <span class="text-muted">(không đổi được khách khi đang sửa đơn)</span>`;
+
+  document.getElementById("notes").value = order.notes || "";
+  document.getElementById("gold-price-99").value = order.gold_price_99 > 0 ? order.gold_price_99 : "";
+
+  // Chiết khấu %: hệ thống chỉ lưu số tiền, ước lại % từ subtotal + tiền vàng đã quy đổi
+  // để tiện sửa tiếp (nếu người dùng đổi mặt hàng, % này áp lại trên tổng mới).
+  const goldMoneyValueLoaded = Math.round((parseFloat(order.gold_to_money_99) || 0) * (parseFloat(order.gold_price_99) || 0));
+  const preDiscountLoaded = (parseInt(order.subtotal) || 0) + goldMoneyValueLoaded;
+  const pctLoaded = preDiscountLoaded > 0 ? Math.round(((parseInt(order.discount) || 0) / preDiscountLoaded) * 1000) / 10 : 0;
+  document.getElementById("discount-pct").value = pctLoaded;
+
+  // Mặt hàng: có product_variant_id → cart (hàng trong danh mục); không có → customItems
+  // (mục tuỳ ý gõ tay, chỉ tồn tại trong hoá đơn nháp).
+  cart = [];
+  customItems = [];
+  for (const item of items) {
+    let md = null;
+    try { md = item.metal_details ? JSON.parse(item.metal_details) : null; } catch { md = null; }
+    const unitPrice = parseInt(item.unit_price) || 0;
+    if (item.product_variant_id) {
+      if (md && md.metalType === "gold") {
+        cart.push({
+          variantId: item.product_variant_id, sku: item.sku || "", name: item.product_name,
+          qty: item.quantity, isMetal: true, metalType: "gold",
+          purity: md.purity, basePurity: md.basePurity || 99,
+          grossWeight: md.grossWeight || 0, stoneWeight: md.stoneWeight || 0, weight: md.netWeight || 0,
+          fee: unitPrice, unit: md.unit || "chỉ", unitPrice,
+        });
+      } else {
+        // Hàng thường (hoặc hàng bạc — chưa lưu breakdown riêng nên sửa lại sẽ hiện
+        // dạng đơn giá phẳng, vẫn đúng số tiền, chỉ mất các ô tuổi/TL/giá riêng của bạc).
+        cart.push({ variantId: item.product_variant_id, sku: item.sku || "", name: item.product_name, qty: item.quantity, unitPrice });
+      }
+    } else {
+      customItems.push({
+        name: item.item_name || item.product_name || "", qty: item.quantity,
+        purity: md?.purity || 0, grossWeight: md?.grossWeight || 0, stoneWeight: md?.stoneWeight || 0,
+        weight: md?.netWeight || 0, price: unitPrice,
+      });
+    }
+  }
+  renderCart();
+  renderCustomItems();
+
+  // Hàng cũ khách trả
+  try { tradeIns = order.trade_in_details ? JSON.parse(order.trade_in_details) : []; } catch { tradeIns = []; }
+  renderTradeIns();
+
+  // Giữ nguyên đúng số "Quy ra tiền" đã chốt lúc tạo, không để calcTotal() tự tính đè.
+  const gtmInput = document.getElementById("gold-to-money-99");
+  if (gtmInput) { gtmInput.value = order.gold_to_money_99 || ""; goldToMoneyDirty = true; }
+
+  calcTotal();
+}
+
+// Init
+renderCart();
+renderCustomItems();
+{
+  const editId = new URLSearchParams(location.search).get("edit");
+  if (editId) loadOrderForEdit(editId);
+}
+</script>
+</body>
+</html>

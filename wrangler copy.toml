@@ -1,0 +1,17 @@
+name = "pos-app"
+compatibility_date = "2026-06-01"
+pages_build_output_dir = "public"
+
+# Secrets — KHÔNG ghi giá trị thật vào đây, dùng lệnh bên dưới:
+#
+# Local (.dev.vars):
+#   DATABASE_URL=postgres://...
+#   JWT_SECRET=chuoi-ngau-nhien-dai-32-ky-tu
+#   GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+#   GOOGLE_CLIENT_SECRET=GOCSPX-xxx
+#
+# Production (chạy 1 lần):
+#   wrangler pages secret put DATABASE_URL
+#   wrangler pages secret put JWT_SECRET
+#   wrangler pages secret put GOOGLE_CLIENT_ID
+#   wrangler pages secret put GOOGLE_CLIENT_SECRET

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cài đặt — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <h2 class="page-title">⚙️ Cài đặt cửa hàng</h2>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="row g-4">
+
+          <!-- Thông tin cửa hàng -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">🏪 Thông tin cửa hàng</h3></div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label required">Tên cửa hàng</label>
+                  <input id="shop_name" type="text" class="form-control" placeholder="VD: Tiệm Vàng Thanh Hương"/>
+                  <small class="text-muted">Hiển thị trên hoá đơn và bill in</small>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Địa chỉ</label>
+                  <textarea id="shop_address" class="form-control" rows="2" placeholder="123 Đường ABC, Quận 1, TP.HCM"></textarea>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Số điện thoại</label>
+                  <input id="shop_phone" type="text" class="form-control" placeholder="0901 234 567"/>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Mã số thuế (MST)</label>
+                  <input id="tax_code" type="text" class="form-control" placeholder="0123456789"/>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Website</label>
+                  <input id="shop_website" type="text" class="form-control" placeholder="https://tiemvangabc.vn"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cài đặt vận hành -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">🔧 Vận hành</h3></div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label">Ngưỡng tồn kho thấp</label>
+                  <div class="input-group">
+                    <input id="low_stock_threshold" type="number" class="form-control" placeholder="5" min="0"/>
+                    <span class="input-group-text">đơn vị</span>
+                  </div>
+                  <small class="text-muted">Cảnh báo khi tồn < ngưỡng này</small>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Khổ giấy bill cuộn</label>
+                  <select id="receipt_width" class="form-select">
+                    <option value="58">58mm</option>
+                    <option value="80" selected>80mm</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Đơn vị tiền tệ</label>
+                  <select id="currency" class="form-select">
+                    <option value="VND" selected>VND — Đồng Việt Nam</option>
+                    <option value="USD">USD — US Dollar</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Lời cảm ơn cuối bill</label>
+                  <input id="receipt_footer" type="text" class="form-control" placeholder="Cảm ơn quý khách! Hẹn gặp lại 😊"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hoá đơn điện tử (VAT) -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">🧾 Hoá đơn điện tử (VAT)</h3></div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label">Nhà cung cấp</label>
+                  <select id="einvoice_provider" class="form-select">
+                    <option value="">— Chưa dùng —</option>
+                    <option value="matbao">Mắt Bão Invoice</option>
+                    <option value="misa">MISA meInvoice (chưa hỗ trợ)</option>
+                    <option value="viettel">Viettel S-Invoice (chưa hỗ trợ)</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Base URL API</label>
+                  <input id="einvoice_base_url" type="text" class="form-control" placeholder="https://xxx.hoadon.online"/>
+                  <small class="text-muted">Do nhà cung cấp cấp riêng khi đăng ký dịch vụ</small>
+                </div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label">Tài khoản API</label>
+                    <input id="einvoice_username" type="text" class="form-control"/>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">Mật khẩu API</label>
+                    <input id="einvoice_password" type="password" class="form-control"/>
+                  </div>
+                </div>
+                <div class="row g-2 mt-1">
+                  <div class="col-6">
+                    <label class="form-label">Mẫu số hoá đơn</label>
+                    <input id="einvoice_pattern" type="text" class="form-control" placeholder="VD: 1"/>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">Ký hiệu hoá đơn</label>
+                    <input id="einvoice_serial" type="text" class="form-control" placeholder="VD: C25TAA"/>
+                  </div>
+                </div>
+                <div class="mb-3 mt-2">
+                  <label class="form-label">Hình thức thanh toán mặc định</label>
+                  <input id="einvoice_payment_method" type="text" class="form-control" placeholder="Tiền mặt/Chuyển khoản"/>
+                </div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label">% VAT tiền công</label>
+                    <input id="einvoice_vat_rate_cong" type="number" class="form-control" placeholder="10"/>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">% VAT tiền vàng</label>
+                    <input id="einvoice_vat_rate_vang" type="number" class="form-control" placeholder="0"/>
+                    <small class="text-muted">Xác nhận với kế toán trước khi đổi</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nút lưu -->
+          <!-- Ngành kinh doanh -->
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">🏷️ Ngành kinh doanh</h3></div>
+            <div class="card-body">
+              <div class="text-muted small mb-3">Chỉ những ngành được chọn mới xuất hiện khi thêm sản phẩm.</div>
+              <div class="row g-2" id="industry-checkboxes"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12">
+            <div class="d-flex gap-2">
+              <button id="btn-save" class="btn btn-primary" onclick="saveSettings()">
+                💾 Lưu cài đặt
+              </button>
+              <span id="save-msg" class="my-auto text-muted small"></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { INDUSTRY_SCHEMAS } from "/js/industry-schemas.js";
+import { api } from "/js/api.js";
+
+requireLogin();
+  initSidebar();
+// Field IDs khớp với settings keys
+const FIELD_KEYS = [
+  "shop_name","shop_address","shop_phone","tax_code","shop_website",
+  "low_stock_threshold","receipt_width","currency","receipt_footer",
+  "einvoice_provider","einvoice_base_url","einvoice_username","einvoice_password",
+  "einvoice_pattern","einvoice_serial","einvoice_payment_method",
+  "einvoice_vat_rate_cong","einvoice_vat_rate_vang"
+];
+
+async function loadSettings() {
+  try {
+    const { settings } = await api.get("/api/settings");
+    FIELD_KEYS.forEach(key => {
+      const el = document.getElementById(key);
+      if (el && settings[key] !== undefined) el.value = settings[key];
+    });
+    renderIndustryCheckboxes(settings.enabled_industries || "");
+  } catch (err) {
+    console.warn("Không load được settings:", err.message);
+  }
+}
+
+window.saveSettings = async function() {
+  const btn    = document.getElementById("btn-save");
+  const msgEl  = document.getElementById("save-msg");
+  const checkedIndustries = [...document.querySelectorAll(".industry-cb:checked")]
+      .map(cb => cb.value).join(",");
+    const body = { enabled_industries: checkedIndustries };
+
+  FIELD_KEYS.forEach(key => {
+    const el = document.getElementById(key);
+    if (el) body[key] = el.value.trim();
+  });
+
+  btn.disabled = true; btn.textContent = "⏳ Đang lưu...";
+  try {
+    await api.post("/api/settings", body);
+    msgEl.textContent = "✅ Đã lưu " + new Date().toLocaleTimeString("vi-VN");
+    msgEl.className   = "my-auto text-success small";
+  } catch (err) {
+    msgEl.textContent = "❌ Lỗi: " + err.message;
+    msgEl.className   = "my-auto text-danger small";
+  } finally {
+    btn.disabled = false; btn.textContent = "💾 Lưu cài đặt";
+  }
+};
+function renderIndustryCheckboxes(enabledStr) {
+  const enabled = enabledStr ? enabledStr.split(",").filter(Boolean) : [];
+  const wrap = document.getElementById("industry-checkboxes");
+  if (!wrap) return;
+  wrap.innerHTML = Object.entries(INDUSTRY_SCHEMAS).map(([key, val]) => `
+    <div class="col-6 col-md-4 col-lg-3">
+      <label class="form-check">
+        <input type="checkbox" class="form-check-input industry-cb" value="${key}"
+          ${enabled.length === 0 || enabled.includes(key) ? "checked" : ""}/>
+        <span class="form-check-label">${val.label}</span>
+      </label>
+    </div>`).join("");
+}
+
+renderIndustryCheckboxes("");
+loadSettings();
+</script>
+</body>
+</html>

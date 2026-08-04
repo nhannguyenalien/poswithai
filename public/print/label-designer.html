@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Thiết kế tem — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <style>
+    .d-toolbar {
+      background:#1e293b; padding:8px 16px;
+      display:flex; align-items:center; gap:8px; flex-shrink:0;
+      border-bottom:1px solid #334155;
+    }
+    .d-toolbar label { color:#94a3b8; font-size:12px; white-space:nowrap; }
+    .d-toolbar input, .d-toolbar select {
+      background:#334155; border:1px solid #475569; color:#e2e8f0;
+      border-radius:4px; padding:3px 7px; font-size:12px;
+    }
+    .d-toolbar .sep { width:1px; height:24px; background:#475569; }
+    .d-btn { padding:5px 12px; border-radius:4px; font-size:12px; font-weight:600; border:none; cursor:pointer; white-space:nowrap; }
+    .d-btn-save   { background:#22c55e; color:#fff; }
+    .d-btn-export { background:#8b5cf6; color:#fff; }
+    .d-btn-import { background:#f59e0b; color:#000; }
+    .d-btn-json   { background:#0ea5e9; color:#fff; }
+    .d-btn-reset  { background:#ef4444; color:#fff; }
+    .size-badge   { background:#334155; color:#94a3b8; border-radius:4px; padding:3px 8px; font-size:11px; font-family:monospace; }
+
+    .designer-wrap { display:grid; grid-template-columns:220px 1fr 240px; height:calc(100vh - 57px); overflow:hidden; }
+
+    .left-panel { background:#f1f5f9; border-right:1px solid #e2e8f0; display:flex; flex-direction:column; overflow:hidden; }
+    .panel-section { border-bottom:1px solid #e2e8f0; }
+    .panel-title { padding:8px 12px 5px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#64748b; display:flex; align-items:center; justify-content:space-between; }
+    .panel-title button { font-size:10px; padding:2px 7px; border:1px solid #cbd5e1; border-radius:4px; background:#fff; cursor:pointer; color:#374151; }
+    .panel-title button:hover { background:#eff6ff; border-color:#3b82f6; color:#3b82f6; }
+
+    .tpl-list { max-height:190px; overflow-y:auto; padding:6px; }
+    .tpl-item { background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:6px 8px; margin-bottom:4px; font-size:11px; display:flex; align-items:center; gap:4px; }
+    .tpl-item .tpl-name { flex:1; font-weight:500; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .tpl-item .tpl-size { color:#94a3b8; font-size:10px; }
+    .tpl-item button { padding:1px 6px; border:none; border-radius:3px; cursor:pointer; font-size:10px; }
+    .tpl-load { background:#eff6ff; color:#3b82f6; }
+    .tpl-del  { background:#fef2f2; color:#ef4444; }
+    .tpl-empty { color:#94a3b8; font-size:11px; text-align:center; padding:10px; }
+
+    .palette-list { overflow-y:auto; padding:6px; flex:1; }
+    .p-section { padding:5px 4px 2px; font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; }
+    .p-item { background:#fff; border:1px solid #cbd5e1; border-radius:5px; padding:6px 8px; margin-bottom:4px; font-size:11px; cursor:grab; user-select:none; display:flex; align-items:center; gap:6px; transition:border-color .15s; }
+    .p-item:hover { border-color:#3b82f6; background:#eff6ff; }
+    .p-item .pname { color:#374151; font-weight:500; }
+    .p-item .pdesc { color:#9ca3af; font-size:10px; }
+
+    .canvas-area { background:#d1d5db; display:flex; align-items:center; justify-content:center; overflow:auto; padding:20px; }
+    .canvas-outer { display:flex; flex-direction:column; align-items:center; gap:8px; }
+    .canvas-hint  { font-size:11px; color:#6b7280; }
+    #canvas { background:#fff; box-shadow:0 4px 24px rgba(0,0,0,.3); position:relative; cursor:default; overflow:hidden; flex-shrink:0; }
+    #canvas.drag-over { outline:2px dashed #3b82f6; }
+    #canvas::before { content:""; position:absolute; inset:0; background-image:radial-gradient(circle,rgba(0,0,0,.12) 1px,transparent 1px); background-size:calc(var(--scale)*5mm) calc(var(--scale)*5mm); pointer-events:none; }
+    .cf { position:absolute; cursor:move; box-sizing:border-box; user-select:none; z-index:2; }
+    .cf-inner { width:100%; height:100%; display:flex; align-items:center; overflow:hidden; border:1.5px dashed transparent; box-sizing:border-box; }
+    .cf:hover .cf-inner { border-color:#93c5fd; }
+    .cf.sel .cf-inner   { border-color:#3b82f6; background:rgba(59,130,246,.04); }
+    .rh { position:absolute; width:8px; height:8px; background:#3b82f6; border:1.5px solid #fff; border-radius:2px; z-index:10; display:none; }
+    .cf.sel .rh { display:block; }
+    .rh.br { right:-4px; bottom:-4px; cursor:se-resize; }
+
+    .props-panel { background:#f8fafc; border-left:1px solid #e2e8f0; display:flex; flex-direction:column; overflow:hidden; }
+    .props-body { overflow-y:auto; padding:10px; flex:1; }
+    .props-empty { color:#94a3b8; font-size:12px; text-align:center; padding:20px 10px; }
+    .ps { margin-bottom:14px; }
+    .ps-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:7px; }
+    .pr { display:flex; align-items:center; gap:6px; margin-bottom:7px; }
+    .pr label { font-size:11px; color:#374151; min-width:52px; }
+    .pr input, .pr select { flex:1; font-size:12px; padding:3px 6px; border:1px solid #d1d5db; border-radius:4px; }
+    .pr input[type=number] { width:56px; flex:none; }
+    .pr input:focus, .pr select:focus { outline:none; border-color:#3b82f6; }
+    .btn-grp { display:flex; gap:3px; }
+    .bg-btn { padding:3px 8px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; cursor:pointer; background:#fff; min-width:28px; text-align:center; }
+    .bg-btn.on { background:#3b82f6; color:#fff; border-color:#2563eb; }
+    .del-field-btn { width:100%; padding:6px; background:#fef2f2; border:1px solid #fecaca; color:#ef4444; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; margin-top:4px; }
+
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:none; align-items:center; justify-content:center; }
+    .overlay.show { display:flex; }
+    .overlay-box { background:#fff; border-radius:10px; padding:24px; min-width:320px; max-width:540px; width:100%; }
+    .overlay-box h4 { margin-bottom:12px; font-size:16px; font-weight:700; }
+    .overlay-box input[type=text] { width:100%; padding:8px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; margin-bottom:10px; box-sizing:border-box; }
+    .ov-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+    .ov-btns button { padding:7px 16px; border-radius:6px; border:none; cursor:pointer; font-weight:600; font-size:13px; }
+  </style>
+</head>
+<body style="overflow:hidden">
+<div style="display:flex; flex-direction:column; height:100vh;">
+
+  <!-- TOOLBAR -->
+  <div class="d-toolbar">
+    <span style="color:#e2e8f0; font-weight:700; font-size:13px">🏷️ Thiết kế tem</span>
+    <div class="sep"></div>
+    <label>Kích cỡ:</label>
+    <select id="size-preset" onchange="applyPreset(this.value)">
+      <option value="80x50">80×50 mm</option>
+      <option value="50x30">50×30 mm</option>
+      <option value="100x60">100×60 mm</option>
+      <option value="40x25">40×25 mm</option>
+      <option value="custom">Tuỳ chỉnh</option>
+    </select>
+    <label>R:</label>
+    <input id="lw" type="number" value="80" min="20" max="200" onchange="resizeCanvas()" style="width:50px"/>
+    <label>mm × C:</label>
+    <input id="lh" type="number" value="50" min="15" max="150" onchange="resizeCanvas()" style="width:50px"/>
+    <label>mm</label>
+    <div class="sep"></div>
+    <label>Zoom:</label>
+    <input id="zoom" type="range" min="2" max="8" value="4" step=".5" oninput="resizeCanvas()" style="width:70px;accent-color:#3b82f6"/>
+    <span id="zoom-label" class="size-badge">4×</span>
+    <div class="sep"></div>
+    <button class="d-btn d-btn-save"   onclick="showSaveDialog()">💾 Lưu mẫu</button>
+    <button class="d-btn d-btn-json"   onclick="showJsonEditor()">📋 Copy/Paste JSON</button>
+    <button class="d-btn d-btn-export" onclick="exportJSON()">📤 Export file</button>
+    <button class="d-btn d-btn-import" onclick="document.getElementById('import-file').click()">📥 Import file</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(this)"/>
+    <button class="d-btn d-btn-reset"  onclick="resetTemplate()">↺ Đặt lại</button>
+    <span id="save-msg" style="color:#4ade80;font-size:12px;"></span>
+    <div class="sep"></div>
+    <a href="/products.html" class="d-btn" style="background:#475569;color:#e2e8f0;text-decoration:none;">← Quay lại</a>
+  </div>
+
+  <!-- 3-PANEL -->
+  <div class="designer-wrap">
+
+    <!-- LEFT -->
+    <div class="left-panel">
+      <div class="panel-section">
+        <div class="panel-title">
+          <span>📋 Mẫu đã lưu</span>
+          <button onclick="loadTemplatesList()">↺</button>
+        </div>
+        <div class="tpl-list" id="tpl-list">
+          <div class="tpl-empty">Chưa có mẫu nào</div>
+        </div>
+      </div>
+      <div class="panel-title" style="padding-top:8px"><span>📦 Các trường</span></div>
+      <div class="palette-list" id="palette"></div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-area">
+      <div class="canvas-outer">
+        <div class="canvas-hint">Kéo trường từ trái vào đây · Click để chọn · Kéo để di chuyển</div>
+        <div id="canvas" style="--scale:4px"></div>
+        <div class="canvas-hint">Delete = xóa · Mũi tên = 1mm · Shift+mũi tên = 5mm</div>
+      </div>
+    </div>
+
+    <!-- PROPERTIES -->
+    <div class="props-panel">
+      <div class="panel-title"><span>⚙️ Thuộc tính</span></div>
+      <div class="props-body" id="props-body">
+        <div class="props-empty">Chọn 1 trường để chỉnh thuộc tính</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Save dialog -->
+<div class="overlay" id="save-overlay">
+  <div class="overlay-box">
+    <h4>💾 Lưu mẫu thiết kế</h4>
+    <input type="text" id="tpl-name-input" placeholder="Tên mẫu (VD: Tem vàng 80×50, Tem nhỏ bạc...)"/>
+    <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="tpl-set-default" checked/>
+      Đặt làm mẫu mặc định khi in tem
+    </label>
+    <div class="ov-btns">
+      <button onclick="document.getElementById('save-overlay').classList.remove('show')" style="background:#f1f5f9">Hủy</button>
+      <button onclick="saveNamedTemplate()" style="background:#22c55e;color:#fff">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- JSON editor dialog -->
+<div class="overlay" id="json-overlay">
+  <div class="overlay-box" style="min-width:500px;max-width:640px">
+    <h4>📋 Copy / Paste JSON</h4>
+    <div style="font-size:12px;color:#64748b;margin-bottom:8px">
+      Copy JSON bên dưới để chia sẻ · Hoặc paste JSON mới vào rồi bấm <b>Áp dụng</b>
+    </div>
+    <textarea id="json-textarea"
+      style="width:100%;height:300px;font-family:monospace;font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:8px;resize:vertical;box-sizing:border-box"
+      placeholder="Paste JSON thiết kế tem vào đây..."></textarea>
+    <div style="display:flex;justify-content:space-between;margin-top:10px">
+      <div style="display:flex;gap:6px">
+        <button onclick="copyJsonToClipboard()"
+          style="background:#0ea5e9;color:#fff;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-weight:600">
+          📋 Copy
+        </button>
+        <button onclick="applyJsonFromTextarea()"
+          style="background:#22c55e;color:#fff;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-weight:600">
+          ✅ Áp dụng
+        </button>
+        <button onclick="saveFromJson()"
+          style="background:#8b5cf6;color:#fff;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-weight:600">
+          💾 Lưu mẫu
+        </button>
+      </div>
+      <button onclick="document.getElementById('json-overlay').classList.remove('show')"
+        style="background:#f1f5f9;padding:7px 14px;border-radius:6px;border:none;cursor:pointer">
+        Đóng
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script type="module">
+import { getToken } from "/js/auth.js";
+
+// ── FIELD DEFINITIONS ─────────────────────────────────────────
+const FIELD_DEFS = [
+  { type:"product_name",   icon:"📦", name:"Tên sản phẩm",      desc:"Tên đầy đủ",         w:60,h:7,  fs:12,bold:true  },
+  { type:"sku",            icon:"🔑", name:"Mã SKU",             desc:"Mã sản phẩm",        w:35,h:5,  fs:9, bold:false },
+  { type:"barcode",        icon:"▌▌", name:"Mã vạch",            desc:"CODE128",            w:55,h:16, fs:8, bold:false, isBarcode:true },
+  { type:"price",          icon:"💰", name:"Giá bán",            desc:"Định dạng VND",      w:38,h:6,  fs:13,bold:true  },
+  { type:"gold_type",      icon:"🥇", name:"Loại vàng",          desc:"SJC / 18K...",       w:28,h:5,  fs:9, bold:false },
+  { type:"net_weight",     icon:"⚖️", name:"Trọng lượng",        desc:"chỉ / gram",         w:28,h:5,  fs:9, bold:false },
+  { type:"making_fee",     icon:"🔨", name:"Tiền công",          desc:"VND",                w:30,h:5,  fs:9, bold:false },
+  { type:"brand_name",     icon:"🏭", name:"Nhãn hiệu",          desc:"Tên thương hiệu",    w:50,h:5,  fs:8, bold:false },
+  { type:"brand_symbol",   icon:"®",  name:"Ký hiệu NSX",        desc:"PNJ® ...",           w:30,h:5,  fs:8, bold:false },
+  { type:"brand_standard", icon:"📋", name:"Tiêu chuẩn cơ sở",  desc:"TCCS...",            w:55,h:5,  fs:7, bold:false },
+  { type:"brand_address",  icon:"📍", name:"Địa chỉ NSX",        desc:"Địa chỉ",            w:70,h:5,  fs:7, bold:false },
+  { type:"shop_name",      icon:"🏪", name:"Tên cửa hàng",       desc:"Từ cài đặt",         w:60,h:5,  fs:8, bold:false },
+  { type:"shop_phone",     icon:"📞", name:"SĐT cửa hàng",       desc:"Từ cài đặt",         w:40,h:5,  fs:8, bold:false },
+  { type:"custom_text",    icon:"✏️", name:"Chữ tuỳ chỉnh",      desc:"Nhập trực tiếp",     w:50,h:5,  fs:10,bold:false,customText:"" },
+  { type:"divider",        icon:"─",  name:"Đường kẻ ngang",     desc:"",                   w:70,h:2,  fs:0, bold:false,isDivider:true },
+];
+
+const SECTIONS = [
+  { title:"Sản phẩm",    types:["product_name","sku","barcode","price"] },
+  { title:"Vàng / Bạc",  types:["gold_type","net_weight","making_fee"] },
+  { title:"Thương hiệu", types:["brand_name","brand_symbol","brand_standard","brand_address"] },
+  { title:"Cửa hàng",    types:["shop_name","shop_phone"] },
+  { title:"Khác",        types:["custom_text","divider"] },
+];
+
+// ── STATE ─────────────────────────────────────────────────────
+let S = { lw:80, lh:50, scale:4, fields:[], sel:null };
+let nextId = 1;
+let _settings = {};
+let _templates = [];
+const mkId  = () => "f" + (nextId++);
+const mm    = n  => Math.round(n * S.scale);
+const px2mm = n  => n / S.scale;
+
+// ── INIT ─────────────────────────────────────────────────────
+(async function init() {
+  try {
+    const r = await fetch("/api/settings", { headers:{ Authorization:"Bearer "+getToken() } });
+    if (r.ok) { const d = await r.json(); _settings = d.settings||{}; }
+  } catch {}
+  try { _templates = JSON.parse(_settings.label_templates||"[]"); } catch { _templates=[]; }
+  renderTemplatesList();
+  try {
+    if (_settings.label_template) {
+      const t = JSON.parse(_settings.label_template);
+      S.lw=t.lw||80; S.lh=t.lh||50; S.fields=t.fields||[];
+      nextId = S.fields.reduce((m,f)=>Math.max(m,parseInt(f.id.slice(1))+1),1);
+      document.getElementById("lw").value = S.lw;
+      document.getElementById("lh").value = S.lh;
+    }
+  } catch {}
+  if (!S.fields.length) loadDefaultLayout();
+  buildPalette();
+  resizeCanvas();
+  renderAll();
+  setupCanvas();
+})();
+
+// ── TEMPLATE LIST ─────────────────────────────────────────────
+window.loadTemplatesList = async function() {
+  try {
+    const r = await fetch("/api/settings",{headers:{Authorization:"Bearer "+getToken()}});
+    if (r.ok) { const d=await r.json(); _settings=d.settings||{}; _templates=JSON.parse(_settings.label_templates||"[]"); }
+  } catch {}
+  renderTemplatesList();
+};
+
+function renderTemplatesList() {
+  const el = document.getElementById("tpl-list");
+  if (!_templates.length) { el.innerHTML='<div class="tpl-empty">Chưa có mẫu nào</div>'; return; }
+  el.innerHTML = _templates.map((t,i) =>
+    '<div class="tpl-item" title="'+t.name+'">' +
+    '<div><div class="tpl-name">'+t.name+'</div><div class="tpl-size">'+t.lw+'×'+t.lh+'mm · '+t.fields.length+' trường</div></div>' +
+    '<button class="tpl-load" onclick="loadTemplate('+i+')">Tải</button>' +
+    '<button class="tpl-del"  onclick="deleteTemplate('+i+')">✕</button>' +
+    '</div>'
+  ).join("");
+}
+
+// ── SAVE DIALOG ───────────────────────────────────────────────
+window.showSaveDialog = function() {
+  document.getElementById("tpl-name-input").value = "";
+  document.getElementById("save-overlay").classList.add("show");
+  setTimeout(()=>document.getElementById("tpl-name-input").focus(),100);
+};
+
+window.saveNamedTemplate = async function(nameOverride) {
+  const name = nameOverride || document.getElementById("tpl-name-input")?.value.trim();
+  if (!name) return alert("Nhập tên mẫu");
+  const setDefault = document.getElementById("tpl-set-default")?.checked !== false;
+  document.getElementById("save-overlay").classList.remove("show");
+  await _doSaveTemplate(name, setDefault);
+};
+
+async function _doSaveTemplate(name, setDefault=true) {
+  const tpl = { id:crypto.randomUUID(), name, lw:S.lw, lh:S.lh, fields:S.fields, created_at:new Date().toISOString() };
+  const idx = _templates.findIndex(t=>t.name===name);
+  if (idx>=0) _templates[idx]=tpl; else _templates.push(tpl);
+  const body = { label_templates: JSON.stringify(_templates) };
+  if (setDefault) body.label_template = JSON.stringify({lw:S.lw,lh:S.lh,fields:S.fields});
+  try {
+    await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+getToken()},body:JSON.stringify(body)});
+    _settings.label_templates = body.label_templates;
+    renderTemplatesList();
+    showMsg("✅ Đã lưu: "+name);
+  } catch { showMsg("❌ Lỗi khi lưu"); }
+}
+
+window.loadTemplate = function(idx) {
+  const t = _templates[idx]; if (!t) return;
+  S.lw=t.lw||80; S.lh=t.lh||50;
+  S.fields = JSON.parse(JSON.stringify(t.fields));
+  nextId = S.fields.reduce((m,f)=>Math.max(m,parseInt(f.id.slice(1))+1),1);
+  document.getElementById("lw").value=S.lw;
+  document.getElementById("lh").value=S.lh;
+  document.getElementById("size-preset").value=S.lw+"x"+S.lh;
+  resizeCanvas(); renderAll(); S.sel=null; renderProps();
+  showMsg("✅ Đã tải: "+t.name);
+};
+
+window.deleteTemplate = async function(idx) {
+  const t=_templates[idx];
+  if (!confirm('Xóa mẫu "'+t.name+'"?')) return;
+  _templates.splice(idx,1);
+  try {
+    await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+getToken()},body:JSON.stringify({label_templates:JSON.stringify(_templates)})});
+    _settings.label_templates=JSON.stringify(_templates);
+    renderTemplatesList();
+  } catch {}
+};
+
+// ── EXPORT / IMPORT FILE ──────────────────────────────────────
+window.exportJSON = function() {
+  const name = prompt("Tên file export:", "tem-thiet-ke") || "tem-thiet-ke";
+  const data = { name, lw:S.lw, lh:S.lh, fields:S.fields, version:"1.0" };
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a = Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:name.replace(/\s+/g,"-")+".json"});
+  a.click(); URL.revokeObjectURL(a.href);
+  showMsg("📤 Đã export: "+name+".json");
+};
+
+window.importJSON = function(input) {
+  const file=input.files[0]; if (!file) return;
+  const reader=new FileReader();
+  reader.onload = e => {
+    try {
+      const data=JSON.parse(e.target.result);
+      if (!data.fields||!Array.isArray(data.fields)) throw new Error("Thiếu trường fields");
+      applyTemplateData(data);
+      showMsg("📥 Đã import: "+(data.name||file.name));
+      document.getElementById("json-textarea").value = JSON.stringify(data,null,2);
+      if (confirm('Lưu mẫu vừa import vào danh sách?\nTên: "'+(data.name||"")+"\"")) {
+        document.getElementById("tpl-name-input").value = data.name||file.name.replace(".json","");
+        document.getElementById("save-overlay").classList.add("show");
+      }
+    } catch(err) { alert("File JSON không hợp lệ: "+err.message); }
+  };
+  reader.readAsText(file);
+  input.value="";
+};
+
+// ── JSON EDITOR (COPY/PASTE) ──────────────────────────────────
+window.showJsonEditor = function() {
+  const data = { name:"tem", lw:S.lw, lh:S.lh, fields:S.fields, version:"1.0" };
+  document.getElementById("json-textarea").value = JSON.stringify(data,null,2);
+  document.getElementById("json-overlay").classList.add("show");
+};
+
+window.copyJsonToClipboard = async function() {
+  const text = document.getElementById("json-textarea").value;
+  try { await navigator.clipboard.writeText(text); showMsg("✅ Đã copy JSON vào clipboard"); }
+  catch { document.getElementById("json-textarea").select(); document.execCommand("copy"); showMsg("✅ Đã copy"); }
+};
+
+window.applyJsonFromTextarea = function() {
+  const text = document.getElementById("json-textarea").value.trim();
+  try {
+    const data=JSON.parse(text);
+    if (!data.fields||!Array.isArray(data.fields)) throw new Error("Thiếu trường fields");
+    applyTemplateData(data);
+    document.getElementById("json-overlay").classList.remove("show");
+    showMsg("✅ Đã áp dụng thiết kế từ JSON");
+  } catch(err) { alert("JSON không hợp lệ: "+err.message); }
+};
+
+window.saveFromJson = function() {
+  const text = document.getElementById("json-textarea").value.trim();
+  try {
+    const data=JSON.parse(text);
+    if (!data.fields||!Array.isArray(data.fields)) throw new Error("Thiếu trường fields");
+    applyTemplateData(data);
+    document.getElementById("json-overlay").classList.remove("show");
+    document.getElementById("tpl-name-input").value = data.name||"";
+    document.getElementById("save-overlay").classList.add("show");
+    setTimeout(()=>document.getElementById("tpl-name-input").focus(),100);
+  } catch(err) { alert("JSON không hợp lệ: "+err.message); }
+};
+
+function applyTemplateData(data) {
+  S.lw=data.lw||80; S.lh=data.lh||50;
+  S.fields=JSON.parse(JSON.stringify(data.fields));
+  nextId=S.fields.reduce((m,f)=>Math.max(m,parseInt(f.id.slice(1))+1),1);
+  document.getElementById("lw").value=S.lw;
+  document.getElementById("lh").value=S.lh;
+  resizeCanvas(); renderAll(); S.sel=null; renderProps();
+}
+
+// ── PALETTE ───────────────────────────────────────────────────
+function buildPalette() {
+  const el=document.getElementById("palette"); el.innerHTML="";
+  SECTIONS.forEach(sec=>{
+    const t=document.createElement("div"); t.className="p-section"; t.textContent=sec.title; el.appendChild(t);
+    sec.types.forEach(type=>{
+      const def=FIELD_DEFS.find(d=>d.type===type); if (!def) return;
+      const item=document.createElement("div"); item.className="p-item"; item.draggable=true; item.dataset.type=type;
+      item.innerHTML='<span>'+def.icon+'</span><div><div class="pname">'+def.name+'</div>'+(def.desc?'<div class="pdesc">'+def.desc+'</div>':'')+' </div>';
+      item.addEventListener("dragstart",e=>{e.dataTransfer.setData("fieldType",type);e.dataTransfer.effectAllowed="copy";});
+      item.addEventListener("click",()=>addField(type,S.lw/2-20,S.lh/2-3));
+      el.appendChild(item);
+    });
+  });
+}
+
+// ── CANVAS RESIZE ─────────────────────────────────────────────
+window.resizeCanvas = function() {
+  S.lw=parseFloat(document.getElementById("lw").value)||80;
+  S.lh=parseFloat(document.getElementById("lh").value)||50;
+  S.scale=parseFloat(document.getElementById("zoom").value)||4;
+  document.getElementById("zoom-label").textContent=S.scale+"×";
+  const c=document.getElementById("canvas");
+  c.style.width=mm(S.lw)+"px"; c.style.height=mm(S.lh)+"px";
+  c.style.setProperty("--scale",S.scale+"px");
+  renderAll();
+};
+
+window.applyPreset = function(v) {
+  if (v==="custom") return;
+  const [w,h]=v.split("x").map(Number);
+  document.getElementById("lw").value=w; document.getElementById("lh").value=h;
+  resizeCanvas();
+};
+
+// ── ADD / RENDER FIELDS ───────────────────────────────────────
+function addField(type,x=5,y=5) {
+  const def=FIELD_DEFS.find(d=>d.type===type)||{};
+  const f={id:mkId(),type,x:Math.round(x),y:Math.round(y),w:def.w||40,h:def.h||6,fs:def.fs??10,bold:!!def.bold,italic:false,align:"left",customText:def.customText||"",isBarcode:!!def.isBarcode,isDivider:!!def.isDivider};
+  S.fields.push(f); renderAll(); selectField(f.id);
+}
+
+function renderAll() {
+  const c=document.getElementById("canvas");
+  c.querySelectorAll(".cf").forEach(el=>el.remove());
+  S.fields.forEach(f=>renderField(f));
+}
+
+function renderField(f) {
+  const c=document.getElementById("canvas");
+  let el=c.querySelector("#"+f.id);
+  if (!el) {
+    el=document.createElement("div"); el.id=f.id; el.className="cf";
+    el.innerHTML='<div class="cf-inner" id="cfi-'+f.id+'"></div><div class="rh br" data-fid="'+f.id+'"></div>';
+    el.addEventListener("mousedown",onFieldMousedown);
+    el.querySelector(".rh").addEventListener("mousedown",onResizeMousedown);
+    c.appendChild(el);
+  }
+  el.className="cf"+(S.sel===f.id?" sel":"");
+  el.style.left=mm(f.x)+"px"; el.style.top=mm(f.y)+"px";
+  el.style.width=mm(f.w)+"px"; el.style.height=mm(f.h)+"px";
+
+  const inner=el.querySelector(".cf-inner");
+  if (f.isDivider) {
+    inner.innerHTML='<div style="width:100%;height:1px;background:#000;margin:auto;"></div>';
+  } else if (f.isBarcode) {
+    inner.innerHTML='<svg id="bc-'+f.id+'" style="width:100%;height:100%;display:block;"></svg>';
+    try { JsBarcode("#bc-"+f.id,"SAMPLE123",{format:"CODE128",width:1.4,height:mm(f.h)-6,displayValue:f.fs>0,fontSize:Math.max(6,mm(f.fs/3.78)),margin:1}); } catch {}
+  } else {
+    const sample=f.customText||sampleValue(f.type);
+    inner.style.cssText="font-size:"+Math.max(7,mm(f.fs/3.78))+"px;font-weight:"+(f.bold?"bold":"normal")+";font-style:"+(f.italic?"italic":"normal")+";justify-content:"+(f.align==="center"?"center":f.align==="right"?"flex-end":"flex-start")+";padding:0 2px;width:100%;";
+    inner.innerHTML='<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1e293b;">'+sample+'</span>';
+  }
+}
+
+function sampleValue(type) {
+  const m={product_name:"Nhẫn trơn nữ 1 chỉ",sku:"NHAN001",price:"8.350.000 đ",gold_type:"SJC 99.99",net_weight:"1.000 chỉ",making_fee:"500.000 đ",brand_name:"PNJ",brand_symbol:"PNJ®",brand_standard:"TCCS 01:2020",brand_address:"123 Lê Lợi, Q1, TP.HCM",shop_name:_settings.shop_name||"Tiệm Vàng ABC",shop_phone:_settings.shop_phone||"0901 234 567",custom_text:"Văn bản tuỳ chỉnh"};
+  return m[type]||type;
+}
+
+function selectField(id) { S.sel=id; renderAll(); renderProps(); }
+function deselect()       { S.sel=null; renderAll(); renderProps(); }
+
+// ── PROPERTIES ───────────────────────────────────────────────
+function renderProps() {
+  const el=document.getElementById("props-body");
+  const f=S.fields.find(f=>f.id===S.sel);
+  if (!f) { el.innerHTML='<div class="props-empty">Chọn 1 trường để chỉnh thuộc tính</div>'; return; }
+  el.innerHTML=`
+    <div class="ps"><div class="ps-title">📍 Vị trí & Kích thước</div>
+      <div class="pr"><label>X (mm)</label><input type="number" value="${f.x}" step=".5" min="0" oninput="setProp('x',+this.value)"/></div>
+      <div class="pr"><label>Y (mm)</label><input type="number" value="${f.y}" step=".5" min="0" oninput="setProp('y',+this.value)"/></div>
+      <div class="pr"><label>Rộng</label><input type="number" value="${f.w}" step="1" min="5" oninput="setProp('w',+this.value)"/> mm</div>
+      <div class="pr"><label>Cao</label><input type="number" value="${f.h}" step=".5" min="2" oninput="setProp('h',+this.value)"/> mm</div>
+    </div>
+    ${!f.isBarcode&&!f.isDivider?`
+    <div class="ps"><div class="ps-title">✏️ Văn bản</div>
+      <div class="pr"><label>Cỡ chữ</label><input type="number" value="${f.fs}" step=".5" min="5" max="36" oninput="setProp('fs',+this.value)"/> pt</div>
+      <div class="pr"><label>Định dạng</label>
+        <div class="btn-grp">
+          <button class="bg-btn ${f.bold?"on":""}"   onclick="toggleProp('bold')"><b>B</b></button>
+          <button class="bg-btn ${f.italic?"on":""}" onclick="toggleProp('italic')"><i>I</i></button>
+        </div>
+      </div>
+      <div class="pr"><label>Căn lề</label>
+        <div class="btn-grp">
+          <button class="bg-btn ${f.align==="left"?"on":""}"   onclick="setAlign('left')">⬅</button>
+          <button class="bg-btn ${f.align==="center"?"on":""}" onclick="setAlign('center')">↔</button>
+          <button class="bg-btn ${f.align==="right"?"on":""}"  onclick="setAlign('right')">➡</button>
+        </div>
+      </div>
+      ${f.type==="custom_text"?'<div class="pr"><label>Nội dung</label><input type="text" value="'+(f.customText||"")+'" placeholder="Nhập văn bản..." oninput="setProp(\'customText\',this.value)" style="flex:1"/></div>':""}
+    </div>`:f.isBarcode?`
+    <div class="ps"><div class="ps-title">▌▌ Mã vạch</div>
+      <div class="pr"><label>Cao vạch</label><input type="number" value="${f.h}" step="1" min="8" oninput="setProp('h',+this.value)"/> mm</div>
+      <div class="pr"><label>Số dưới</label><button class="bg-btn ${f.fs>0?"on":""}" onclick="setProp('fs',${f.fs>0?0:7})">${f.fs>0?"Hiện":"Ẩn"}</button></div>
+    </div>`:""}
+    <button class="del-field-btn" onclick="deleteSelected()">🗑 Xóa trường này</button>`;
+}
+
+window.setProp    = function(k,v) { const f=S.fields.find(f=>f.id===S.sel); if(f){f[k]=v;renderField(f);} };
+window.toggleProp = function(k)   { const f=S.fields.find(f=>f.id===S.sel); if(f){f[k]=!f[k];renderField(f);renderProps();} };
+window.setAlign   = function(a)   { const f=S.fields.find(f=>f.id===S.sel); if(f){f.align=a;renderField(f);renderProps();} };
+window.deleteSelected = function(){ if(!S.sel)return; S.fields=S.fields.filter(f=>f.id!==S.sel); S.sel=null; renderAll(); renderProps(); };
+
+// ── DRAG ON CANVAS ────────────────────────────────────────────
+function onFieldMousedown(e) {
+  if (e.target.classList.contains("rh")) return;
+  e.preventDefault();
+  const fid=e.currentTarget.id; const f=S.fields.find(f=>f.id===fid); if (!f) return;
+  selectField(fid);
+  const sx=e.clientX,sy=e.clientY,ox=f.x,oy=f.y;
+  function onMove(e){f.x=Math.max(0,Math.min(S.lw-f.w,ox+px2mm(e.clientX-sx)));f.y=Math.max(0,Math.min(S.lh-f.h,oy+px2mm(e.clientY-sy)));renderField(f);}
+  function onUp(){document.removeEventListener("mousemove",onMove);document.removeEventListener("mouseup",onUp);}
+  document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+}
+
+function onResizeMousedown(e) {
+  e.preventDefault(); e.stopPropagation();
+  const fid=e.currentTarget.dataset.fid; const f=S.fields.find(f=>f.id===fid); if (!f) return;
+  selectField(fid);
+  const sx=e.clientX,sy=e.clientY,ow=f.w,oh=f.h;
+  function onMove(e){f.w=Math.max(8,ow+px2mm(e.clientX-sx));f.h=Math.max(2,oh+px2mm(e.clientY-sy));renderField(f);}
+  function onUp(){document.removeEventListener("mousemove",onMove);document.removeEventListener("mouseup",onUp);}
+  document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+}
+
+// ── DRAG FROM PALETTE ─────────────────────────────────────────
+function setupCanvas() {
+  const c=document.getElementById("canvas");
+  c.addEventListener("dragover",e=>{e.preventDefault();c.classList.add("drag-over");});
+  c.addEventListener("dragleave",()=>c.classList.remove("drag-over"));
+  c.addEventListener("drop",e=>{
+    e.preventDefault(); c.classList.remove("drag-over");
+    const type=e.dataTransfer.getData("fieldType"); if (!type) return;
+    const rect=c.getBoundingClientRect();
+    addField(type,Math.max(0,px2mm(e.clientX-rect.left)),Math.max(0,px2mm(e.clientY-rect.top)));
+  });
+  c.addEventListener("mousedown",e=>{if(e.target===c)deselect();});
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────
+document.addEventListener("keydown",e=>{
+  if (e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+  if (!S.sel) return;
+  if (e.key==="Delete"||e.key==="Backspace"){deleteSelected();return;}
+  const f=S.fields.find(f=>f.id===S.sel); if (!f) return;
+  const step=e.shiftKey?5:1;
+  if(e.key==="ArrowLeft") {f.x=Math.max(0,f.x-step);e.preventDefault();}
+  if(e.key==="ArrowRight"){f.x=Math.min(S.lw-f.w,f.x+step);e.preventDefault();}
+  if(e.key==="ArrowUp")   {f.y=Math.max(0,f.y-step);e.preventDefault();}
+  if(e.key==="ArrowDown") {f.y=Math.min(S.lh-f.h,f.y+step);e.preventDefault();}
+  renderField(f);
+});
+
+// Ctrl+S
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==="s"){e.preventDefault();showSaveDialog();}
+});
+
+// ── RESET ─────────────────────────────────────────────────────
+window.resetTemplate = function() {
+  if (!confirm("Đặt lại về mặc định? Thiết kế hiện tại sẽ mất.")) return;
+  S.fields=[]; S.sel=null; S.lw=80; S.lh=50;
+  document.getElementById("lw").value=80; document.getElementById("lh").value=50;
+  document.getElementById("size-preset").value="80x50";
+  loadDefaultLayout(); resizeCanvas(); renderAll(); renderProps();
+};
+
+function loadDefaultLayout() {
+  S.fields=[]; nextId=1;
+  addField("product_name",3,3);
+  addField("sku",3,12);
+  addField("price",3,19);
+  addField("barcode",3,27,{w:55,h:16});
+  addField("shop_name",3,45,{fs:7});
+  S.sel=null;
+}
+
+function showMsg(msg) {
+  const el=document.getElementById("save-msg"); el.textContent=msg;
+  setTimeout(()=>el.textContent="",3000);
+}
+
+// ── OVERLAY CLOSE ON BACKDROP ─────────────────────────────────
+["save-overlay","json-overlay"].forEach(id=>{
+  document.getElementById(id).addEventListener("click",e=>{
+    if(e.target.id===id) document.getElementById(id).classList.remove("show");
+  });
+});
+document.getElementById("tpl-name-input").addEventListener("keydown",e=>{
+  if(e.key==="Enter") saveNamedTemplate();
+  if(e.key==="Escape") document.getElementById("save-overlay").classList.remove("show");
+});
+document.getElementById("json-textarea").addEventListener("keydown",e=>{
+  if(e.key==="Escape") document.getElementById("json-overlay").classList.remove("show");
+});
+</script>
+</body>
+</html>

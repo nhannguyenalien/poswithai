@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Kho hàng — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <h2 class="page-title">Kho hàng</h2>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="card">
+          <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+              <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-inbound">Nhập kho</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-stock" onclick="loadStock()">Tồn kho</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-history" onclick="loadHistory()">Lịch sử</a></li>
+            </ul>
+          </div>
+          <div class="card-body">
+            <div class="tab-content">
+
+              <!-- Tab nhập kho -->
+              <div class="tab-pane active" id="tab-inbound">
+                <div class="row g-3 mb-4">
+                  <div class="col-md-6">
+                    <label class="form-label required">Sản phẩm (tìm theo tên hoặc SKU)</label>
+                    <div class="position-relative">
+                      <input id="inv-search" type="text" class="form-control" placeholder="Nhập tên hoặc SKU..."/>
+                      <div id="inv-autocomplete" class="autocomplete-list d-none"></div>
+                    </div>
+                    <div id="inv-selected" class="mt-2 text-muted small"></div>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label required">Số lượng</label>
+                    <input id="inv-qty" type="number" class="form-control" value="1" min="1"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">Giá vốn/đơn vị</label>
+                    <input id="inv-cost" type="number" class="form-control" placeholder="VND" min="0"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">Ghi chú</label>
+                    <input id="inv-note" type="text" class="form-control" placeholder="Tuỳ chọn"/>
+                  </div>
+                </div>
+                <button class="btn btn-primary" onclick="submitInbound()">✅ Nhập kho</button>
+                <div id="inv-msg" class="mt-3"></div>
+              </div>
+
+              <!-- Tab tồn kho -->
+              <div class="tab-pane" id="tab-stock">
+                <div class="mb-3">
+                  <input id="stock-search" type="text" class="form-control" placeholder="Lọc theo tên hoặc SKU..." oninput="filterStockTable()"/>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-vcenter">
+                    <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Barcode</th><th class="text-end">Giá</th><th class="text-center">Tồn</th><th>Giá vốn gần nhất</th><th></th></tr></thead>
+                    <tbody id="stock-rows"><tr><td colspan="7" class="text-muted text-center py-4">Nhấn tab "Tồn kho" để tải</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Tab lịch sử -->
+              <div class="tab-pane" id="tab-history">
+                <div class="table-responsive">
+                  <table class="table table-vcenter">
+                    <thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>SKU</th><th>Loại</th><th class="text-center">SL</th><th>Giá vốn</th><th>Ghi chú</th></tr></thead>
+                    <tbody id="history-rows"><tr><td colspan="7" class="text-muted text-center py-4">Đang tải...</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal điều chỉnh tồn -->
+<div class="modal modal-blur fade" id="modal-adjust" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Điều chỉnh tồn kho</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="adj-variant-id"/>
+        <div class="mb-3">
+          <label class="form-label">Sản phẩm</label>
+          <div id="adj-product-name" class="fw-medium"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tồn hiện tại</label>
+          <div id="adj-current-qty" class="h3 text-blue"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label required">Tồn thực tế (sau kiểm kho)</label>
+          <input id="adj-qty" type="number" class="form-control" min="0"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Lý do</label>
+          <select id="adj-reason" class="form-select">
+            <option value="recount">Kiểm kho</option>
+            <option value="damaged">Hàng lỗi/hỏng</option>
+            <option value="lost">Mất hàng</option>
+            <option value="other">Khác</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-warning" onclick="submitAdjust()">Cập nhật tồn</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND = n => n ? new Intl.NumberFormat("vi-VN").format(n) + "đ" : "—";
+
+  let selectedVariantId = null;
+  let stockData = [];
+  let lowStockThreshold = 5;
+
+  // Autocomplete tìm sản phẩm
+  const invSearch = document.getElementById("inv-search");
+  const acList    = document.getElementById("inv-autocomplete");
+
+  invSearch.addEventListener("input", async function() {
+    const term = this.value.trim();
+    if (term.length < 2) { acList.classList.add("d-none"); return; }
+    try {
+      const { products } = await api.get(`/api/products?search=${encodeURIComponent(term)}`);
+      // Lấy variants từ products
+      const items = products.slice(0, 8);
+      acList.innerHTML = items.map(p => `
+        <div class="ac-item" onclick='selectProduct("${p.id}", "${p.name}", "${p.sku}")'>${p.name} <span class="text-muted">${p.sku}</span></div>
+      `).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
+      acList.classList.remove("d-none");
+    } catch { acList.classList.add("d-none"); }
+  });
+
+  document.addEventListener("click", e => {
+    if (!invSearch.contains(e.target)) acList.classList.add("d-none");
+  });
+
+  // Chọn sản phẩm từ autocomplete — lấy variant đầu tiên
+  window.selectProduct = async function(productId, name, sku) {
+    acList.classList.add("d-none");
+    invSearch.value = `${name} (${sku})`;
+    try {
+      const { variants } = await api.get(`/api/products/${productId}`);
+      if (!variants.length) { alert("Sản phẩm này chưa có variant. Vui lòng tạo variant trước."); return; }
+      // Nếu có nhiều variant, dùng cái đầu tiên (có thể mở rộng thành dropdown sau)
+      selectedVariantId = variants[0].id;
+      document.getElementById("inv-selected").textContent =
+        `Variant: ${variants[0].sku} — Tồn hiện tại: ${variants[0].stock_qty ?? 0}`;
+    } catch (err) { alert(err.message); }
+  };
+
+  window.submitInbound = async function() {
+    if (!selectedVariantId) return alert("Vui lòng chọn sản phẩm");
+    const qty  = parseInt(document.getElementById("inv-qty").value);
+    const cost = parseInt(document.getElementById("inv-cost").value) || null;
+    const note = document.getElementById("inv-note").value;
+    if (qty < 1) return alert("Số lượng phải ít nhất 1");
+
+    const msgEl = document.getElementById("inv-msg");
+    try {
+      const res = await api.post("/api/inventory", {
+        product_variant_id: selectedVariantId,
+        type: "IN", quantity: qty,
+        unit_cost: cost, note,
+      });
+      msgEl.innerHTML = `<div class="alert alert-success">✅ Nhập thành công. Tồn mới: <strong>${res.new_qty}</strong></div>`;
+      selectedVariantId = null;
+      invSearch.value = "";
+      document.getElementById("inv-selected").textContent = "";
+      document.getElementById("inv-qty").value = "1";
+      document.getElementById("inv-cost").value = "";
+      document.getElementById("inv-note").value = "";
+    } catch (err) {
+      msgEl.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+    }
+  };
+
+  window.loadStock = async function() {
+    const tbody = document.getElementById("stock-rows");
+    try {
+      const data = await api.get("/api/inventory/stock");
+      stockData = data.items;
+      lowStockThreshold = data.threshold ?? 5;
+      renderStockTable(stockData);
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
+    }
+  };
+
+  function renderStockTable(items) {
+    const tbody = document.getElementById("stock-rows");
+    tbody.innerHTML = items.length ? items.map(i => `
+      <tr class="${parseInt(i.qty) <= lowStockThreshold ? "low-stock" : ""}">
+        <td>${i.product_name}</td>
+        <td><span class="text-muted">${i.sku}</span></td>
+        <td><span class="text-muted">${i.barcode || "—"}</span></td>
+        <td class="text-end">${fmtVND(i.price)}</td>
+        <td class="text-center">
+          <span class="badge qty-badge ${parseInt(i.qty) === 0 ? "bg-red-lt" : parseInt(i.qty) <= lowStockThreshold ? "bg-orange-lt" : "bg-green-lt"}">${i.qty}</span>
+        </td>
+        <td>${fmtVND(i.last_cost)}</td>
+        <td><button class="btn btn-sm btn-ghost-warning" onclick='openAdjust("${i.variant_id}", "${i.product_name}", ${i.qty})'>Điều chỉnh</button></td>
+      </tr>`).join("") : `<tr><td colspan="7" class="text-muted text-center">Không có dữ liệu</td></tr>`;
+  }
+
+  window.filterStockTable = function() {
+    const term = document.getElementById("stock-search").value.toLowerCase();
+    const filtered = stockData.filter(i =>
+      i.product_name.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term)
+    );
+    renderStockTable(filtered);
+  };
+
+  window.loadHistory = async function() {
+    const tbody = document.getElementById("history-rows");
+    try {
+      const { transactions } = await api.get("/api/inventory?date=today");
+      const typeBadge = t => ({ IN:"bg-green-lt", OUT:"bg-red-lt", ADJUST:"bg-yellow-lt" })[t] || "bg-secondary-lt";
+      const typeLabel = t => ({ IN:"Nhập", OUT:"Xuất", ADJUST:"Điều chỉnh" })[t] || t;
+      tbody.innerHTML = transactions.length ? transactions.map(t => `
+        <tr>
+          <td class="text-muted">${new Date(t.created_at).toLocaleTimeString("vi-VN")}</td>
+          <td>${t.product_name}</td>
+          <td>${t.sku}</td>
+          <td><span class="badge ${typeBadge(t.type)}">${typeLabel(t.type)}</span></td>
+          <td class="text-center fw-bold">${t.quantity}</td>
+          <td>${t.unit_cost ? fmtVND(t.unit_cost) : "—"}</td>
+          <td class="text-muted">${t.note || ""}</td>
+        </tr>`).join("")
+        : `<tr><td colspan="7" class="text-muted text-center py-4">Chưa có giao dịch hôm nay</td></tr>`;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
+    }
+  };
+
+  window.openAdjust = function(variantId, name, currentQty) {
+    document.getElementById("adj-variant-id").value = variantId;
+    document.getElementById("adj-product-name").textContent = name;
+    document.getElementById("adj-current-qty").textContent = currentQty;
+    document.getElementById("adj-qty").value = currentQty;
+    new bootstrap.Modal(document.getElementById("modal-adjust")).show();
+  };
+
+  window.submitAdjust = async function() {
+    const variantId = document.getElementById("adj-variant-id").value;
+    const qty       = parseInt(document.getElementById("adj-qty").value);
+    const reason    = document.getElementById("adj-reason").value;
+    if (isNaN(qty) || qty < 0) return alert("Số lượng không hợp lệ");
+
+    try {
+      const res = await api.post("/api/inventory", {
+        product_variant_id: variantId,
+        type: "ADJUST", quantity: qty, reason,
+      });
+      bootstrap.Modal.getInstance(document.getElementById("modal-adjust")).hide();
+      loadStock();
+    } catch (err) { alert(err.message); }
+  };
+</script>
+</body>
+</html>

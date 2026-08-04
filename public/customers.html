@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Khách hàng — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">Khách hàng</h2></div>
+          <div class="col-auto"><button class="btn btn-primary" onclick="openAddModal()">+ Thêm khách</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="card">
+          <div class="card-body py-2">
+            <div class="row g-2">
+              <div class="col">
+                <input id="search" type="text" class="form-control" placeholder="Tìm theo tên hoặc SĐT..."/>
+              </div>
+              <div class="col-auto">
+                <button class="btn" onclick="loadCustomers()">Tìm</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Họ tên</th><th>SĐT</th><th>Email</th>
+                  <th class="text-center">Số đơn</th>
+                  <th class="text-end">Tổng chi tiêu</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="customer-rows">
+                <tr><td colspan="6" class="text-muted text-center py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm/sửa khách -->
+<div class="modal modal-blur fade" id="modal-customer" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-cust-title">Thêm khách hàng</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="c-id"/>
+        <div class="mb-3">
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="c-type" id="c-type-individual" value="individual" checked onchange="onCustomerTypeChange()"/>
+            <label class="btn btn-outline-primary" for="c-type-individual">👤 Cá nhân</label>
+            <input type="radio" class="btn-check" name="c-type" id="c-type-business" value="business" onchange="onCustomerTypeChange()"/>
+            <label class="btn btn-outline-primary" for="c-type-business">🏢 Doanh nghiệp</label>
+          </div>
+        </div>
+        <div class="mb-3 d-none" id="c-tax-section">
+          <label class="form-label required">Mã số thuế</label>
+          <div class="d-flex gap-2">
+            <input id="c-taxcode" type="text" class="form-control" placeholder="VD: 0101245486"/>
+            <button type="button" class="btn btn-outline-primary text-nowrap" id="btn-tax-lookup" onclick="lookupTaxCode()">Tra cứu</button>
+          </div>
+          <div id="c-tax-status" class="small mt-1"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label required" id="c-name-label">Họ tên</label>
+          <input id="c-name" type="text" class="form-control"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Số điện thoại</label>
+          <input id="c-phone" type="text" class="form-control"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input id="c-email" type="email" class="form-control"/>
+        </div>
+        <div class="mb-3" id="c-idcard-section">
+          <label class="form-label">Số CCCD/CMND</label>
+          <input id="c-idcard" type="text" class="form-control" placeholder="VD: 079123456789"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Địa chỉ</label>
+          <textarea id="c-address" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="saveCustomer()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal xem lịch sử -->
+<div class="modal modal-blur fade" id="modal-history" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Lịch sử — <span id="hist-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row mb-3" id="hist-summary"></div>
+        <table class="table table-vcenter">
+          <thead><tr><th>Mã đơn</th><th>Ngày</th><th class="text-end">Tổng tiền</th><th>Trạng thái</th></tr></thead>
+          <tbody id="hist-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND = n => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+  const statusBadge = s => {
+    const map = { pending:"bg-yellow-lt", completed:"bg-green-lt", cancelled:"bg-red-lt" };
+    const label = { pending:"Chờ TT", completed:"Hoàn thành", cancelled:"Đã hủy" };
+    return `<span class="badge ${map[s]||"bg-secondary-lt"}">${label[s]||s}</span>`;
+  };
+
+  window.loadCustomers = async function() {
+    const search = document.getElementById("search").value.trim();
+    const tbody  = document.getElementById("customer-rows");
+    tbody.innerHTML = `<tr><td colspan="6" class="text-muted text-center">Đang tải...</td></tr>`;
+    try {
+      const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(search)}`);
+      tbody.innerHTML = customers.length ? customers.map(c => `
+        <tr>
+          <td class="fw-medium">
+            ${c.name}
+            ${c.is_business ? `<span class="badge bg-azure-lt ms-1">🏢 DN</span>` : ""}
+            ${c.tax_code ? `<div class="text-muted small">MST: ${c.tax_code}</div>` : ""}
+          </td>
+          <td>${c.phone || "<span class='text-muted'>—</span>"}</td>
+          <td>${c.email || "<span class='text-muted'>—</span>"}</td>
+          <td class="text-center"><span class="badge bg-blue-lt">${c.total_orders}</span></td>
+          <td class="text-end">${fmtVND(c.total_spent)}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openHistory("${c.id}", "${c.name}")'>Lịch sử</button>
+            <button class="btn btn-sm btn-ghost-secondary" onclick='openEditModal(${JSON.stringify(c)})'>Sửa</button>
+          </td>
+        </tr>`).join("")
+        : `<tr><td colspan="6" class="text-muted text-center py-4">Không tìm thấy khách hàng</td></tr>`;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">${err.message}</td></tr>`;
+    }
+  };
+
+  // "Cá nhân" ⇄ "Doanh nghiệp" — đổi nhãn "Họ tên"→"Tên công ty", ẩn CCCD (không cần
+  // với doanh nghiệp), hiện ô MST + nút tra cứu tự động điền tên/địa chỉ.
+  window.onCustomerTypeChange = function() {
+    const isBiz = document.getElementById("c-type-business").checked;
+    document.getElementById("c-tax-section").classList.toggle("d-none", !isBiz);
+    document.getElementById("c-idcard-section").classList.toggle("d-none", isBiz);
+    document.getElementById("c-name-label").textContent = isBiz ? "Tên công ty" : "Họ tên";
+  };
+
+  window.lookupTaxCode = async function() {
+    const code = document.getElementById("c-taxcode").value.trim();
+    const statusEl = document.getElementById("c-tax-status");
+    if (!code) return alert("Nhập mã số thuế trước");
+    const btn = document.getElementById("btn-tax-lookup");
+    btn.disabled = true; btn.textContent = "Đang tra...";
+    statusEl.innerHTML = "";
+    try {
+      const data = await api.get(`/api/tax-lookup/${encodeURIComponent(code)}`);
+      document.getElementById("c-name").value = data.name;
+      document.getElementById("c-address").value = data.address || "";
+      statusEl.innerHTML = `<span class="text-success">✓ ${data.name}${data.status ? ` — ${data.status}` : ""}</span>`;
+    } catch (err) {
+      statusEl.innerHTML = `<span class="text-danger">${err.message}</span>`;
+    } finally {
+      btn.disabled = false; btn.textContent = "Tra cứu";
+    }
+  };
+
+  window.openAddModal = function() {
+    document.getElementById("c-id").value = "";
+    document.getElementById("c-name").value = "";
+    document.getElementById("c-phone").value = "";
+    document.getElementById("c-email").value = "";
+    document.getElementById("c-idcard").value = "";
+    document.getElementById("c-address").value = "";
+    document.getElementById("c-taxcode").value = "";
+    document.getElementById("c-tax-status").innerHTML = "";
+    document.getElementById("c-type-individual").checked = true;
+    onCustomerTypeChange();
+    document.getElementById("modal-cust-title").textContent = "Thêm khách hàng";
+    new bootstrap.Modal(document.getElementById("modal-customer")).show();
+  };
+
+  window.openEditModal = function(c) {
+    document.getElementById("c-id").value    = c.id;
+    document.getElementById("c-name").value  = c.name;
+    document.getElementById("c-phone").value = c.phone || "";
+    document.getElementById("c-email").value = c.email || "";
+    document.getElementById("c-idcard").value = c.id_card || "";
+    document.getElementById("c-address").value = c.address || "";
+    document.getElementById("c-taxcode").value = c.tax_code || "";
+    document.getElementById("c-tax-status").innerHTML = "";
+    document.getElementById(c.is_business ? "c-type-business" : "c-type-individual").checked = true;
+    onCustomerTypeChange();
+    document.getElementById("modal-cust-title").textContent = "Sửa khách hàng";
+    new bootstrap.Modal(document.getElementById("modal-customer")).show();
+  };
+
+  window.saveCustomer = async function() {
+    const id      = document.getElementById("c-id").value;
+    const isBiz   = document.getElementById("c-type-business").checked;
+    const body  = {
+      name:        document.getElementById("c-name").value.trim(),
+      phone:       document.getElementById("c-phone").value.trim(),
+      email:       document.getElementById("c-email").value.trim(),
+      id_card:     document.getElementById("c-idcard").value.trim(),
+      address:     document.getElementById("c-address").value.trim(),
+      is_business: isBiz,
+      tax_code:    isBiz ? document.getElementById("c-taxcode").value.trim() : "",
+    };
+    if (!body.name) return alert(isBiz ? "Tên công ty là bắt buộc" : "Tên là bắt buộc");
+    if (isBiz && !body.tax_code) return alert("Mã số thuế là bắt buộc với khách doanh nghiệp");
+    try {
+      if (id) await api.put(`/api/customers/${id}`, body);
+      else    await api.post("/api/customers", body);
+      bootstrap.Modal.getInstance(document.getElementById("modal-customer")).hide();
+      loadCustomers();
+    } catch (err) { alert(err.message); }
+  };
+
+  window.openHistory = async function(customerId, name) {
+    document.getElementById("hist-name").textContent = name;
+    document.getElementById("hist-rows").innerHTML = `<tr><td colspan="4" class="text-muted text-center">Đang tải...</td></tr>`;
+    document.getElementById("hist-summary").innerHTML = "";
+    new bootstrap.Modal(document.getElementById("modal-history")).show();
+
+    try {
+      const { customer, orders } = await api.get(`/api/customers/${customerId}`);
+      const totalSpent = orders.filter(o => o.status === "completed").reduce((s, o) => s + parseInt(o.total), 0);
+
+      document.getElementById("hist-summary").innerHTML = `
+        <div class="col"><div class="card card-sm"><div class="card-body">
+          <div class="text-muted">Tổng đơn</div><div class="h3">${orders.length}</div>
+        </div></div></div>
+        <div class="col"><div class="card card-sm"><div class="card-body">
+          <div class="text-muted">Tổng chi tiêu</div><div class="h3">${fmtVND(totalSpent)}</div>
+        </div></div></div>
+        <div class="col"><div class="card card-sm"><div class="card-body">
+          <div class="text-muted">SĐT</div><div class="h3">${customer.phone || "—"}</div>
+        </div></div></div>`;
+
+      document.getElementById("hist-rows").innerHTML = orders.length ? orders.map(o => `
+        <tr>
+          <td class="fw-medium">${o.order_number}</td>
+          <td class="text-muted">${new Date(o.created_at).toLocaleDateString("vi-VN")}</td>
+          <td class="text-end">${fmtVND(o.total)}</td>
+          <td>${statusBadge(o.status)}</td>
+        </tr>`).join("")
+        : `<tr><td colspan="4" class="text-muted text-center">Chưa có đơn hàng</td></tr>`;
+    } catch (err) {
+      document.getElementById("hist-rows").innerHTML = `<tr><td colspan="4" class="text-danger">${err.message}</td></tr>`;
+    }
+  };
+
+  document.getElementById("search").addEventListener("keydown", e => { if (e.key === "Enter") loadCustomers(); });
+  loadCustomers();
+</script>
+</body>
+</html>

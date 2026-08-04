@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sản phẩm — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark"></aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">🏷️ Sản phẩm</h2></div>
+          <div class="col-auto d-flex gap-2">
+            <a href="/print/label-designer.html" target="_blank" class="btn btn-outline-warning">✏️ Thiết kế tem</a>
+            <button class="btn btn-primary" onclick="openAddModal()">+ Thêm sản phẩm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2">
+              <div class="col"><input id="search" type="text" class="form-control" placeholder="Tìm tên hoặc SKU..."/></div>
+              <div class="col-auto">
+                <select id="filter-type" class="form-select">
+                  <option value="">Tất cả ngành</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <select id="filter-status" class="form-select">
+                  <option value="active">Đang bán</option>
+                  <option value="">Tất cả</option>
+                  <option value="inactive">Đã ẩn</option>
+                </select>
+              </div>
+              <div class="col-auto"><button class="btn" onclick="loadProducts()">Lọc</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>SKU</th><th>Tên sản phẩm</th><th>Ngành</th>
+                  <th class="text-end">Giá</th><th class="text-center">Tồn</th>
+                  <th>Trạng thái</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="product-rows">
+                <tr><td colspan="7" class="text-muted text-center py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL THÊM/SỬA SẢN PHẨM ── -->
+<div class="modal modal-blur fade" id="modal-product" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-product-title">Thêm sản phẩm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="p-id"/>
+        <input type="hidden" id="p-variant-id"/>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label required">Tên sản phẩm</label>
+            <input id="p-name" type="text" class="form-control" placeholder="VD: Nhẫn trơn nữ 1 chỉ"/>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Ngành hàng</label>
+            <select id="p-type" class="form-select" onchange="onProductTypeChange(this.value)">
+              <option value="general">Chung 📦</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Danh mục</label>
+            <select id="p-category" class="form-select">
+              <option value="">— Chọn danh mục —</option>
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Mã SKU</label>
+            <input id="p-sku" type="text" class="form-control" placeholder="Để trống → tự tạo"/>
+          </div>
+          <div class="col-md-7">
+            <label class="form-label required">Giá bán</label>
+            <div class="input-group">
+              <input id="p-price" type="text" class="form-control text-end fw-bold"
+                     placeholder="0" oninput="onPriceInput(this)"/>
+              <span class="input-group-text">đ</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- VÀNG -->
+        <div id="gold-section-product" class="d-none mt-3 p-3 rounded" style="background:#fffbeb;border:1.5px solid #f59e0b">
+          <div class="fw-bold text-warning mb-3">🥇 Thông số vàng</div>
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label form-label-sm">Loại vàng</label>
+              <select id="p-gold-type" class="form-select form-select-sm">
+                <option value="">— Chọn loại vàng —</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label form-label-sm">TL vàng + đá (chỉ)</label>
+              <input id="p-gross" type="number" step="0.001" class="form-control form-control-sm"
+                     placeholder="1.250" oninput="calcProductNet()"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label form-label-sm">TL đá (chỉ)</label>
+              <input id="p-stone" type="number" step="0.001" class="form-control form-control-sm"
+                     placeholder="0.000" oninput="calcProductNet()"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label form-label-sm">TL vàng thực ↓</label>
+              <input id="p-net" type="number" step="0.001" class="form-control form-control-sm"
+                     style="background:#fef9c3" readonly/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label form-label-sm">Tiền công / sản phẩm</label>
+              <div class="input-group input-group-sm">
+                <input id="p-making-fee" type="text" class="form-control text-end"
+                       placeholder="0" oninput="onPriceInput(this)"/>
+                <span class="input-group-text">đ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BẠC -->
+        <div id="silver-section-product" class="d-none mt-3 p-3 rounded" style="background:#f8fafc;border:1.5px solid #94a3b8">
+          <div class="fw-bold text-secondary mb-3">🥈 Thông số bạc</div>
+          <div class="row g-2">
+            <div class="col-md-3">
+              <label class="form-label form-label-sm">Tuổi bạc</label>
+              <select id="p-silver-purity" class="form-select form-select-sm">
+                <option value="999">999 – Nguyên chất</option>
+                <option value="925" selected>925 – Sterling</option>
+                <option value="800">800</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm">TL tổng (gram)</label>
+              <input id="p-silver-gross" type="number" step="0.01" class="form-control form-control-sm"
+                     oninput="calcSilverProductNet()"/>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm">TL đá (gram)</label>
+              <input id="p-silver-stone" type="number" step="0.01" class="form-control form-control-sm"
+                     placeholder="0" oninput="calcSilverProductNet()"/>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm">TL bạc thực ↓</label>
+              <input id="p-silver-net" type="number" step="0.01" class="form-control form-control-sm"
+                     style="background:#f1f5f9" readonly/>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label form-label-sm">Tiền công / sản phẩm</label>
+              <div class="input-group input-group-sm">
+                <input id="p-silver-fee" type="text" class="form-control text-end"
+                       placeholder="0" oninput="onPriceInput(this)"/>
+                <span class="input-group-text">đ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- THƯƠNG HIỆU -->
+        <div class="mt-3">
+          <button type="button" class="btn btn-sm btn-ghost-secondary w-100 text-start"
+            onclick="document.getElementById('brand-section').classList.toggle('d-none');loadBrandOptions()">
+            🏭 Thương hiệu / Nhà sản xuất <small class="text-muted">(tuỳ chọn)</small>
+          </button>
+          <div id="brand-section" class="d-none mt-2 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0">
+            <div class="row g-2 align-items-end">
+              <div class="col">
+                <label class="form-label form-label-sm">Chọn nhãn hiệu đã lưu</label>
+                <select id="p-brand-id" class="form-select form-select-sm" onchange="onBrandSelect(this.value)">
+                  <option value="">— Chưa chọn —</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                  onclick="document.getElementById('brand-new-form').classList.toggle('d-none')">+ Thêm mới</button>
+              </div>
+            </div>
+            <div id="brand-preview" class="d-none mt-2 p-2 bg-light rounded small text-muted"></div>
+            <div id="brand-new-form" class="d-none mt-3 p-2 border rounded">
+              <div class="fw-semibold small mb-2">Nhãn hiệu mới</div>
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label form-label-sm">Tên *</label>
+                  <input id="nb-name" type="text" class="form-control form-control-sm" placeholder="PNJ, DOJI, SJC"/>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label form-label-sm">Ký hiệu</label>
+                  <input id="nb-symbol" type="text" class="form-control form-control-sm" placeholder="PNJ®"/>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label form-label-sm">Tiêu chuẩn</label>
+                  <input id="nb-standard" type="text" class="form-control form-control-sm" placeholder="TCCS 01:2020"/>
+                </div>
+                <div class="col-12">
+                  <label class="form-label form-label-sm">Địa chỉ NSX</label>
+                  <input id="nb-address" type="text" class="form-control form-control-sm" placeholder="Địa chỉ nhà sản xuất..."/>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-primary" onclick="saveBrandQuick()">💾 Lưu</button>
+                  <button type="button" class="btn btn-sm btn-ghost-secondary"
+                    onclick="document.getElementById('brand-new-form').classList.add('d-none')">Hủy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" onclick="saveProduct()">💾 Lưu sản phẩm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL VARIANTS ── -->
+<div class="modal modal-blur fade" id="modal-variants" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Phiên bản — <span id="variant-product-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="card mb-3">
+          <div class="card-header"><h4 class="card-title">Thêm phiên bản</h4></div>
+          <div class="card-body">
+            <input type="hidden" id="v-product-id"/>
+            <div class="row g-2 mb-2">
+              <div class="col"><input id="v-sku" type="text" class="form-control" placeholder="SKU"/></div>
+              <div class="col"><input id="v-barcode" type="text" class="form-control" placeholder="Barcode"/></div>
+              <div class="col"><input id="v-price" type="number" class="form-control" placeholder="Giá (đ)" min="0"/></div>
+              <div class="col-auto"><button class="btn btn-primary" onclick="saveVariant()">Thêm</button></div>
+            </div>
+            <div id="industry-fields-section" class="d-none border rounded p-2 bg-light">
+              <div id="gold-section" class="d-none">
+                <div class="fw-semibold text-warning mb-2">🥇 Chi tiết vàng</div>
+                <div class="row g-2">
+                  <div class="col-md-3">
+                    <label class="form-label form-label-sm">Loại vàng</label>
+                    <select id="v-gold-type" class="form-select form-select-sm"><option value="">— Chọn loại —</option></select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL vàng+đá (chỉ)</label>
+                    <input id="v-gross" type="number" step="0.001" class="form-control form-control-sm" oninput="calcNetWeight()"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL đá (chỉ)</label>
+                    <input id="v-stone" type="number" step="0.001" class="form-control form-control-sm" placeholder="0" oninput="calcNetWeight()"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL vàng thực</label>
+                    <input id="v-net" type="number" step="0.001" class="form-control form-control-sm bg-light" readonly/>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label form-label-sm">Tiền công/món (đ)</label>
+                    <input id="v-making-fee" type="number" step="1000" class="form-control form-control-sm" placeholder="500000"/>
+                  </div>
+                </div>
+              </div>
+              <div id="silver-section" class="d-none">
+                <div class="fw-semibold text-secondary mb-2">🥈 Chi tiết bạc</div>
+                <div class="row g-2">
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">Tuổi bạc</label>
+                    <select id="v-silver-purity" class="form-select form-select-sm">
+                      <option value="925">925</option><option value="999">999</option><option value="800">800</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL bạc+đá (gram)</label>
+                    <input id="v-silver-gross" type="number" step="0.01" class="form-control form-control-sm" oninput="calcSilverNet()"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL đá (gram)</label>
+                    <input id="v-silver-stone" type="number" step="0.01" class="form-control form-control-sm" placeholder="0" oninput="calcSilverNet()"/>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label form-label-sm">TL bạc thực</label>
+                    <input id="v-silver-net" type="number" step="0.01" class="form-control form-control-sm bg-light" readonly/>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label form-label-sm">Tiền công/món (đ)</label>
+                    <input id="v-silver-making-fee" type="number" step="1000" class="form-control form-control-sm"/>
+                  </div>
+                </div>
+              </div>
+              <div id="dynamic-industry-section">
+                <div class="fw-semibold mb-2" id="dynamic-industry-label"></div>
+                <div class="row g-2" id="dynamic-industry-fields"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter table-sm">
+            <thead><tr><th>SKU</th><th>Barcode</th><th class="text-end">Giá</th><th class="text-center">Tồn</th><th>Kim loại</th><th class="text-center">TL thực</th><th class="text-center">Tiền công</th><th></th></tr></thead>
+            <tbody id="variant-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+import { INDUSTRY_SCHEMAS, getSchema, renderFields, readFields } from "/js/industry-schemas.js";
+import { printSingleLabel, printLabels } from "/js/print.js";
+
+requireLogin();
+initSidebar();
+
+const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0));
+const fmtCur = n => fmtVND(n) + " đ";
+
+// ── PRICE INPUT FORMAT ───────────────────────────────────────
+window.onPriceInput = function(input) {
+  const raw = input.value.replace(/[^\d]/g, "");
+  input.value = raw ? fmtVND(parseInt(raw)) : "";
+};
+
+function getPriceVal(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return 0;
+  return parseInt((el.value || "0").replace(/[^\d]/g, "")) || 0;
+}
+
+function setPriceInput(inputId, value) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const v = parseInt(value) || 0;
+  el.value = v > 0 ? fmtVND(v) : "";
+}
+
+// ── LOAD PRODUCTS ────────────────────────────────────────────
+window.loadProducts = async function() {
+  const search = document.getElementById("search").value;
+  const type   = document.getElementById("filter-type").value;
+  const status = document.getElementById("filter-status").value;
+  const tbody  = document.getElementById("product-rows");
+  tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center">Đang tải...</td></tr>';
+  try {
+    const { products } = await api.get("/api/products?" + new URLSearchParams({ search, type, status }));
+    const typeLabel = t => ({gold:"Vàng 🥇",silver:"Bạc 🥈",fashion:"Thời trang",phone:"Điện thoại"})[t] || "Chung";
+    tbody.innerHTML = products.length ? products.map(p => `
+      <tr>
+        <td class="text-muted">${p.sku}</td>
+        <td>${p.name}${p.brand_name ? '<br/><small class="text-muted">'+p.brand_name+'</small>' : ""}</td>
+        <td><span class="badge bg-blue-lt">${typeLabel(p.product_type)}</span></td>
+        <td class="text-end">${fmtCur(p.base_price)}</td>
+        <td class="text-center"><span class="badge ${p.total_stock < 5 ? "bg-red-lt" : "bg-green-lt"}">${p.total_stock}</span></td>
+        <td><span class="badge ${p.status === "active" ? "bg-green-lt" : "bg-secondary-lt"}">${p.status === "active" ? "Đang bán" : "Đã ẩn"}</span></td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openEditModal("${p.id}")'>Sửa</button>
+          <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openVariantsModal("${p.id}","${p.name}")'>Phiên bản</button>
+          <button class="btn btn-sm btn-ghost-warning me-1" onclick='openLabelModal("${p.id}","${p.name}")'>🏷️ Tem</button>
+          <button class="btn btn-sm btn-ghost-danger" onclick='toggleStatus("${p.id}","${p.status}")'>${p.status === "active" ? "Ẩn" : "Hiện"}</button>
+        </td>
+      </tr>`).join("") : '<tr><td colspan="7" class="text-muted text-center py-4">Chưa có sản phẩm nào</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-danger text-center">' + err.message + "</td></tr>";
+  }
+};
+
+// ── LOAD SETTINGS: filter ngành ─────────────────────────────
+async function loadEnabledIndustries() {
+  try {
+    const { settings } = await api.get("/api/settings");
+    const enabled = (settings.enabled_industries || "").split(",").filter(Boolean);
+    const ALL = Object.entries(INDUSTRY_SCHEMAS);
+    const show = enabled.length ? ALL.filter(([k]) => enabled.includes(k)) : ALL;
+
+    const opts = show.map(([k,v]) => '<option value="'+k+'">'+v.label+'</option>').join("");
+    document.querySelectorAll("#p-type, #filter-type").forEach(sel => {
+      const isFilter = sel.id === "filter-type";
+      sel.innerHTML = (isFilter ? '<option value="">Tất cả ngành</option>' : "") + opts;
+    });
+    // Trigger show/hide nếu đang mở modal
+    const cur = document.getElementById("p-type")?.value;
+    if (cur) onProductTypeChange(cur);
+  } catch {}
+}
+loadEnabledIndustries();
+
+// ── GOLD TYPES cho product modal ────────────────────────────
+async function loadGoldTypesForProduct() {
+  try {
+    const { types } = await api.get("/api/gold/types");
+    const sel = document.getElementById("p-gold-type");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Chọn loại vàng —</option>' +
+      types.map(t => '<option value="'+t.id+'">'+t.name+(t.purity?" ("+t.purity+"%)":"")+' </option>').join("");
+  } catch {}
+}
+
+// ── SHOW/HIDE metal fields khi đổi type ─────────────────────
+window.onProductTypeChange = function(type) {
+  document.getElementById("gold-section-product")?.classList.add("d-none");
+  document.getElementById("silver-section-product")?.classList.add("d-none");
+  if (type === "gold")   { document.getElementById("gold-section-product")?.classList.remove("d-none"); loadGoldTypesForProduct(); }
+  if (type === "silver") { document.getElementById("silver-section-product")?.classList.remove("d-none"); }
+};
+
+window.calcProductNet = function() {
+  const g = parseFloat(document.getElementById("p-gross")?.value) || 0;
+  const s = parseFloat(document.getElementById("p-stone")?.value) || 0;
+  const el = document.getElementById("p-net");
+  if (el) el.value = Math.max(0, g - s).toFixed(3);
+};
+window.calcSilverProductNet = function() {
+  const g = parseFloat(document.getElementById("p-silver-gross")?.value) || 0;
+  const s = parseFloat(document.getElementById("p-silver-stone")?.value) || 0;
+  const el = document.getElementById("p-silver-net");
+  if (el) el.value = Math.max(0, g - s).toFixed(2);
+};
+
+// ── CATEGORIES ───────────────────────────────────────────────
+async function loadCategoryOptions() {
+  try {
+    const { categories } = await api.get("/api/categories");
+    const sel = document.getElementById("p-category");
+    if (sel) sel.innerHTML = '<option value="">— Chọn danh mục —</option>' +
+      categories.map(c => '<option value="'+c.id+'">'+c.name+'</option>').join("");
+  } catch {}
+}
+
+// ── BRANDS ───────────────────────────────────────────────────
+let _brands = [];
+
+window.loadBrandOptions = async function() {
+  if (_brands.length) { renderBrandSelect(); return; }
+  try {
+    const { brands } = await api.get("/api/brands");
+    _brands = brands;
+    renderBrandSelect();
+  } catch {}
+};
+
+function renderBrandSelect() {
+  const sel = document.getElementById("p-brand-id");
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Chưa chọn —</option>' +
+    _brands.map(b => '<option value="'+b.id+'"'+(cur===b.id?' selected':'')+'>'+b.name+'</option>').join("");
+  if (cur) onBrandSelect(cur);
+}
+
+window.onBrandSelect = function(id) {
+  const prev = document.getElementById("brand-preview");
+  if (!id) { prev?.classList.add("d-none"); return; }
+  const b = _brands.find(x => x.id === id);
+  if (!b || !prev) return;
+  const parts = [];
+  if (b.symbol)   parts.push("Ký hiệu: " + b.symbol);
+  if (b.standard) parts.push("Tiêu chuẩn: " + b.standard);
+  if (b.address)  parts.push("Địa chỉ: " + b.address);
+  prev.textContent = parts.join("  |  ") || b.name;
+  prev.classList.remove("d-none");
+};
+
+window.saveBrandQuick = async function() {
+  const name     = document.getElementById("nb-name")?.value.trim();
+  const symbol   = document.getElementById("nb-symbol")?.value.trim()   || null;
+  const standard = document.getElementById("nb-standard")?.value.trim() || null;
+  const address  = document.getElementById("nb-address")?.value.trim()  || null;
+  if (!name) return alert("Tên nhãn hiệu là bắt buộc");
+  try {
+    const brand = await api.post("/api/brands", { name, symbol, standard, address });
+    _brands = [];
+    ["nb-name","nb-symbol","nb-standard","nb-address"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = "";
+    });
+    document.getElementById("brand-new-form")?.classList.add("d-none");
+    await loadBrandOptions();
+    const sel = document.getElementById("p-brand-id");
+    if (sel) { sel.value = brand.id; onBrandSelect(brand.id); }
+  } catch(e) { alert(e.message); }
+};
+
+// ── OPEN MODALS ──────────────────────────────────────────────
+window.openAddModal = function() {
+  document.getElementById("p-id").value   = "";
+  document.getElementById("p-variant-id").value = "";
+  document.getElementById("p-name").value = "";
+  document.getElementById("p-sku").value  = "";
+  setPriceInput("p-price", 0);
+  document.getElementById("p-category").value = "";
+  document.getElementById("modal-product-title").textContent = "Thêm sản phẩm";
+  // Reset brand
+  const bsel = document.getElementById("p-brand-id");
+  if (bsel) bsel.value = "";
+  document.getElementById("brand-preview")?.classList.add("d-none");
+  document.getElementById("brand-section")?.classList.add("d-none");
+  document.getElementById("brand-new-form")?.classList.add("d-none");
+  // Reset metal
+  ["p-gross","p-stone","p-net","p-making-fee",
+   "p-silver-gross","p-silver-stone","p-silver-net","p-silver-fee"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  onProductTypeChange("general");
+  new bootstrap.Modal(document.getElementById("modal-product")).show();
+  loadCategoryOptions();
+  loadEnabledIndustries();
+};
+
+window.openEditModal = async function(productId) {
+  // Danh sách sản phẩm (loadProducts) không trả về category_id lẫn thông số
+  // vàng/bạc (nằm ở bảng riêng theo variant) — phải gọi chi tiết mới có đủ.
+  let p, variants;
+  try {
+    const res = await api.get("/api/products/" + productId);
+    p = res.product;
+    variants = res.variants || [];
+  } catch (err) { return alert(err.message); }
+
+  document.getElementById("p-id").value   = p.id;
+  document.getElementById("p-variant-id").value = variants[0]?.id || "";
+  document.getElementById("p-name").value = p.name;
+  document.getElementById("p-sku").value  = p.sku;
+  setPriceInput("p-price", p.base_price);
+  document.getElementById("modal-product-title").textContent = "Sửa sản phẩm";
+  // Brand
+  const bsel = document.getElementById("p-brand-id");
+  document.getElementById("brand-preview")?.classList.add("d-none");
+  document.getElementById("brand-section")?.classList.add("d-none");
+  if (p.brand_id) {
+    document.getElementById("brand-section")?.classList.remove("d-none");
+    loadBrandOptions().then(() => {
+      if (bsel) { bsel.value = p.brand_id; onBrandSelect(p.brand_id); }
+    });
+  }
+
+  // Reset thông số kim loại trước khi điền lại, tránh dính giá trị của lần sửa trước
+  ["p-gross","p-stone","p-net","p-making-fee",
+   "p-silver-gross","p-silver-stone","p-silver-net","p-silver-fee"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  document.getElementById("p-silver-purity").value = "925";
+
+  new bootstrap.Modal(document.getElementById("modal-product")).show();
+  loadCategoryOptions().then(() => {
+    document.getElementById("p-category").value = p.category_id || "";
+  });
+  loadEnabledIndustries().then(() => {
+    document.getElementById("p-type").value = p.product_type || "general";
+    onProductTypeChange(p.product_type || "general");
+
+    const v = variants[0];
+    if (!v) return;
+    if (p.product_type === "gold") {
+      loadGoldTypesForProduct().then(() => {
+        const sel = document.getElementById("p-gold-type");
+        if (sel) sel.value = v.gold_type_id || "";
+      });
+      document.getElementById("p-gross").value = v.gold_gross || "";
+      document.getElementById("p-stone").value = v.gold_stone || "";
+      calcProductNet();
+      setPriceInput("p-making-fee", v.gold_making_fee || 0);
+    } else if (p.product_type === "silver") {
+      document.getElementById("p-silver-purity").value = v.silver_purity || "925";
+      document.getElementById("p-silver-gross").value = v.silver_gross || "";
+      document.getElementById("p-silver-stone").value = v.silver_stone || "";
+      calcSilverProductNet();
+      setPriceInput("p-silver-fee", v.silver_making_fee || 0);
+    }
+  });
+};
+
+// ── SAVE PRODUCT ─────────────────────────────────────────────
+window.saveProduct = async function() {
+  const id    = document.getElementById("p-id").value;
+  const name  = document.getElementById("p-name").value.trim();
+  const pType = document.getElementById("p-type")?.value || "general";
+  if (!name) return alert("Tên sản phẩm là bắt buộc");
+
+  const body = {
+    sku:          document.getElementById("p-sku")?.value.trim() || undefined,
+    name,
+    product_type: pType,
+    base_price:   getPriceVal("p-price"),
+    category_id:  document.getElementById("p-category")?.value || null,
+    brand_id:     document.getElementById("p-brand-id")?.value  || null,
+  };
+
+  const btn = document.querySelector("#modal-product .btn-primary");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Đang lưu..."; }
+
+  try {
+    let vid = document.getElementById("p-variant-id")?.value || null;
+    if (id) {
+      await api.put("/api/products/" + id, body);
+    } else {
+      const res = await api.post("/api/products", body);
+      vid = res.variant_id;
+    }
+
+    if (vid && (pType === "gold" || pType === "silver")) {
+      try {
+        const gross = pType === "gold"
+          ? parseFloat(document.getElementById("p-gross")?.value) || 0
+          : parseFloat(document.getElementById("p-silver-gross")?.value) || 0;
+        if (gross > 0) {
+          const metal = pType === "gold" ? {
+            type: "gold",
+            gold_type_id: document.getElementById("p-gold-type")?.value || null,
+            gross_weight: gross,
+            stone_weight: parseFloat(document.getElementById("p-stone")?.value) || 0,
+            making_fee:   getPriceVal("p-making-fee"),
+          } : {
+            type: "silver",
+            purity:       document.getElementById("p-silver-purity")?.value || "925",
+            gross_weight: gross,
+            stone_weight: parseFloat(document.getElementById("p-silver-stone")?.value) || 0,
+            making_fee:   getPriceVal("p-silver-fee"),
+          };
+          await api.put("/api/variants/" + vid, { metal });
+        }
+      } catch(e) { console.warn("metal:", e.message); }
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById("modal-product")).hide();
+    loadProducts();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "💾 Lưu sản phẩm"; }
+  }
+};
+
+window.toggleStatus = async function(id, cur) {
+  const ns = cur === "active" ? "inactive" : "active";
+  if (!confirm((ns === "inactive" ? "Ẩn" : "Hiện") + " sản phẩm này?")) return;
+  try { await api.put("/api/products/" + id, { status: ns }); loadProducts(); }
+  catch (err) { alert(err.message); }
+};
+
+// ── VARIANTS MODAL ───────────────────────────────────────────
+let currentProductType = "general";
+
+window.openVariantsModal = async function(productId, productName) {
+  document.getElementById("v-product-id").value = productId;
+  document.getElementById("variant-product-name").textContent = productName;
+  try {
+    const { product } = await api.get("/api/products/" + productId);
+    currentProductType = product.product_type || "general";
+    await updateIndustrySection(currentProductType);
+  } catch {}
+  new bootstrap.Modal(document.getElementById("modal-variants")).show();
+  loadVariants(productId);
+};
+
+async function updateIndustrySection(type) {
+  const wrapper = document.getElementById("industry-fields-section");
+  const goldSec = document.getElementById("gold-section");
+  const silvSec = document.getElementById("silver-section");
+  const dynSec  = document.getElementById("dynamic-industry-section");
+
+  goldSec.classList.add("d-none");
+  silvSec.classList.add("d-none");
+  dynSec.classList.add("d-none");
+  wrapper.classList.add("d-none");
+  if (type === "general") return;
+  wrapper.classList.remove("d-none");
+
+  if (type === "gold") {
+    goldSec.classList.remove("d-none");
+    try {
+      const { types } = await api.get("/api/gold/types");
+      const sel = document.getElementById("v-gold-type");
+      sel.innerHTML = '<option value="">— Chọn loại —</option>' +
+        types.map(t => '<option value="'+t.id+'">'+t.name+(t.purity?" ("+t.purity+"%)":"")+' </option>').join("");
+    } catch {}
+  } else if (type === "silver") {
+    silvSec.classList.remove("d-none");
+  } else {
+    const schema = getSchema(type);
+    if (schema) {
+      dynSec.classList.remove("d-none");
+      document.getElementById("dynamic-industry-label").textContent = (INDUSTRY_SCHEMAS[type]?.label || type) + " — Chi tiết";
+      document.getElementById("dynamic-industry-fields").innerHTML = renderFields(schema.fields, {});
+    }
+  }
+}
+
+async function loadVariants(productId) {
+  const tbody = document.getElementById("variant-rows");
+  try {
+    const { variants } = await api.get("/api/products/" + productId);
+    tbody.innerHTML = variants.length ? variants.map(v => {
+      let tag = "—", weight = "—", fee = "—";
+      if (v.gold_type_name) {
+        tag    = '<span class="badge bg-warning-lt">🥇 '+v.gold_type_name+'</span>';
+        weight = v.gold_net > 0 ? parseFloat(v.gold_net).toFixed(3)+" chỉ" : "—";
+        fee    = v.gold_making_fee > 0 ? fmtCur(v.gold_making_fee) : "—";
+      } else if (v.silver_purity) {
+        tag    = '<span class="badge bg-secondary-lt">🥈 Bạc '+v.silver_purity+'</span>';
+        weight = v.silver_net > 0 ? parseFloat(v.silver_net).toFixed(2)+" g" : "—";
+        fee    = v.silver_making_fee > 0 ? fmtCur(v.silver_making_fee) : "—";
+      }
+      return '<tr><td>'+v.sku+'</td><td class="text-muted">'+(v.barcode||"—")+'</td>' +
+        '<td class="text-end">'+fmtCur(v.price)+'</td>' +
+        '<td class="text-center"><span class="badge bg-blue-lt">'+(v.stock_qty||0)+'</span></td>' +
+        '<td>'+tag+'</td><td class="text-center">'+weight+'</td><td class="text-center">'+fee+'</td>' +
+        '<td class="text-end">' +
+        '<button class="btn btn-sm btn-ghost-warning me-1" onclick=\'printSingleLabel("'+v.id+'")\'>🏷️</button>' +
+        '<button class="btn btn-sm btn-ghost-danger" onclick=\'deleteVariant("'+v.id+'")\'>Xóa</button>' +
+        '</td></tr>';
+    }).join("") : '<tr><td colspan="8" class="text-muted text-center">Chưa có phiên bản</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-danger">' + err.message + "</td></tr>";
+  }
+}
+
+window.calcNetWeight = function() {
+  const g = parseFloat(document.getElementById("v-gross")?.value) || 0;
+  const s = parseFloat(document.getElementById("v-stone")?.value) || 0;
+  const el = document.getElementById("v-net"); if (el) el.value = Math.max(0,g-s).toFixed(3);
+};
+window.calcSilverNet = function() {
+  const g = parseFloat(document.getElementById("v-silver-gross")?.value) || 0;
+  const s = parseFloat(document.getElementById("v-silver-stone")?.value) || 0;
+  const el = document.getElementById("v-silver-net"); if (el) el.value = Math.max(0,g-s).toFixed(2);
+};
+
+window.saveVariant = async function() {
+  const productId = document.getElementById("v-product-id").value;
+  const body = {
+    product_id: productId,
+    sku:     document.getElementById("v-sku").value.trim(),
+    barcode: document.getElementById("v-barcode").value.trim() || null,
+    price:   parseInt(document.getElementById("v-price").value) || 0,
+  };
+  if (!body.sku || !body.price) return alert("SKU và giá là bắt buộc");
+
+  if (currentProductType === "gold") {
+    const gross = parseFloat(document.getElementById("v-gross").value) || 0;
+    if (gross > 0) body.metal = {
+      type: "gold",
+      gold_type_id: document.getElementById("v-gold-type").value || null,
+      gross_weight: gross,
+      stone_weight: parseFloat(document.getElementById("v-stone").value) || 0,
+      making_fee:   parseInt(document.getElementById("v-making-fee").value) || 0,
+    };
+  } else if (currentProductType === "silver") {
+    const gross = parseFloat(document.getElementById("v-silver-gross").value) || 0;
+    if (gross > 0) body.metal = {
+      type:         "silver",
+      purity:       document.getElementById("v-silver-purity").value || "925",
+      gross_weight: gross,
+      stone_weight: parseFloat(document.getElementById("v-silver-stone").value) || 0,
+      making_fee:   parseInt(document.getElementById("v-silver-making-fee").value) || 0,
+    };
+  } else {
+    const schema = getSchema(currentProductType);
+    if (schema) {
+      const attrs = readFields(document.getElementById("dynamic-industry-fields"));
+      if (Object.keys(attrs).length) body.attributes = attrs;
+    }
+  }
+
+  try {
+    await api.post("/api/variants", body);
+    ["v-sku","v-barcode","v-price","v-gross","v-stone","v-net","v-making-fee",
+     "v-silver-gross","v-silver-stone","v-silver-net","v-silver-making-fee"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = "";
+    });
+    document.getElementById("dynamic-industry-fields").innerHTML = "";
+    loadVariants(productId);
+  } catch (err) { alert(err.message); }
+};
+
+window.deleteVariant = async function(id) {
+  if (!confirm("Xóa phiên bản này?")) return;
+  try { await api.delete("/api/variants/" + id); loadVariants(document.getElementById("v-product-id").value); }
+  catch (err) { alert(err.message); }
+};
+
+// ── LABEL MODAL ──────────────────────────────────────────────
+window.openLabelModal = async function(productId, productName) {
+  try {
+    const { variants } = await api.get("/api/products/" + productId);
+    if (!variants.length) return alert("Sản phẩm chưa có phiên bản để in tem");
+    let modal = document.getElementById("modal-label");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.className = "modal modal-blur fade"; modal.id = "modal-label"; modal.tabIndex = -1;
+      modal.innerHTML = '<div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">' +
+        '<div class="modal-header"><h5 class="modal-title">🏷️ In tem: <span id="label-prod-name"></span></h5>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+        '<div class="modal-body"><div class="mb-3"><label class="form-label">Phiên bản cần in</label>' +
+        '<div id="label-variant-list" class="list-group list-group-flush"></div></div>' +
+        '<div class="mb-3"><label class="form-label">Số bản in mỗi tem</label>' +
+        '<input id="label-copies" type="number" class="form-control" value="1" min="1" max="100"/></div></div>' +
+        '<div class="modal-footer"><button class="btn" data-bs-dismiss="modal">Hủy</button>' +
+        '<button class="btn btn-warning" onclick="doLabelPrint()">🖨️ In tem</button></div>' +
+        '</div></div>';
+      document.body.appendChild(modal);
+    }
+    document.getElementById("label-prod-name").textContent = productName;
+    document.getElementById("label-variant-list").innerHTML = variants.map(v =>
+      '<label class="list-group-item list-group-item-action">' +
+      '<input type="checkbox" class="label-variant-cb" value="'+v.id+'" checked/>' +
+      '<span class="ms-2">'+v.sku+(v.barcode?" / "+v.barcode:"")+" — "+fmtVND(v.price||0)+"đ</span></label>"
+    ).join("");
+    new bootstrap.Modal(modal).show();
+  } catch (err) { alert(err.message); }
+};
+
+window.doLabelPrint = function() {
+  const selected = [...document.querySelectorAll(".label-variant-cb:checked")].map(el => el.value);
+  if (!selected.length) return alert("Chọn ít nhất 1 phiên bản");
+  const copies = parseInt(document.getElementById("label-copies").value) || 1;
+  bootstrap.Modal.getInstance(document.getElementById("modal-label"))?.hide();
+  printLabels(selected, copies);
+};
+
+// ── INIT ─────────────────────────────────────────────────────
+document.getElementById("search").addEventListener("keydown", e => { if (e.key === "Enter") loadProducts(); });
+loadProducts();
+loadCategoryOptions();
+</script>
+</body>
+</html>

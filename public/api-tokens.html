@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>API — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    code.token-full { word-break: break-all; user-select: all; }
+    .endpoint-group summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+    .endpoint-row { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    .method-badge { display:inline-block; width:52px; text-align:center; font-weight:700; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark"></aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col">
+            <h2 class="page-title">🔑 API cho tích hợp bên ngoài</h2>
+            <div class="text-muted small">Tạo token để gọi API từ hệ thống khác (kế toán, website, app riêng...) mà không cần đăng nhập bằng tài khoản.</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" onclick="openCreateModal()">+ Tạo token mới</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+
+        <div class="card mb-3">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Tên</th>
+                  <th>Token</th>
+                  <th>Giới hạn</th>
+                  <th>Tạo lúc</th>
+                  <th>Dùng lần cuối</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="token-rows">
+                <tr><td colspan="7" class="text-muted text-center py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">📖 Tài liệu API</h3></div>
+          <div class="card-body">
+            <p>Gọi API bằng header xác thực, thay <code>&lt;token&gt;</code> bằng token đã tạo ở trên:</p>
+            <pre class="bg-dark text-light p-3 rounded"><code>Authorization: Bearer &lt;token&gt;</code></pre>
+            <p class="mb-2">Base URL: <code id="base-url">https://your-domain.pages.dev</code></p>
+            <p class="text-muted small">Mọi request/response đều là JSON. Dữ liệu luôn giới hạn trong phạm vi cửa hàng (tenant) sở hữu token — không thể xem/sửa dữ liệu của cửa hàng khác.</p>
+
+            <div class="alert alert-info">
+              Ví dụ lấy danh sách sản phẩm:
+              <pre class="mb-0 mt-2"><code>curl -H "Authorization: Bearer pos_xxxx" https://your-domain.pages.dev/api/products</code></pre>
+            </div>
+
+            <div id="endpoint-docs"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal tạo token -->
+<div class="modal modal-blur fade" id="modal-create-token" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Tạo API token mới</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label required">Tên token</label>
+        <input id="tok-name" type="text" class="form-control" placeholder="VD: Tích hợp phần mềm kế toán"/>
+        <div class="text-muted small mt-2 mb-3">Đặt tên để sau này biết token nào dùng cho việc gì — có thể thu hồi riêng từng cái bất cứ lúc nào.</div>
+        <label class="form-label">Giới hạn request/phút</label>
+        <input id="tok-ratelimit" type="number" min="1" max="6000" class="form-control" value="120"/>
+        <div class="text-muted small mt-2">Chặn spam/lạm dụng — vượt quá sẽ bị từ chối tạm thời (429) cho tới phút kế tiếp. Để 120 nếu không chắc.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Huỷ</button>
+        <button class="btn btn-primary" onclick="submitCreateToken()">Tạo token</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal hiện token (1 lần duy nhất) -->
+<div class="modal modal-blur fade" id="modal-reveal-token" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">✅ Token đã tạo — lưu lại ngay</h5>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          Token chỉ hiện <strong>đúng 1 lần</strong> ngay bây giờ. Đóng cửa sổ này lại sẽ <strong>không xem lại được nữa</strong> — nếu quên phải thu hồi và tạo token mới.
+        </div>
+        <label class="form-label">Token</label>
+        <div class="input-group">
+          <code class="form-control token-full" id="revealed-token"></code>
+          <button class="btn btn-outline-secondary" type="button" onclick="copyRevealedToken()">📋 Copy</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-bs-dismiss="modal" onclick="loadTokens()">Đã lưu, đóng lại</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
+
+requireLogin();
+initSidebar();
+document.getElementById("base-url").textContent = location.origin;
+
+const fmtDate = s => s ? new Date(s).toLocaleString("vi-VN") : "—";
+
+async function loadTokens() {
+  const tbody = document.getElementById("token-rows");
+  try {
+    const { tokens } = await api.get("/api/api-tokens");
+    tbody.innerHTML = tokens.length ? tokens.map(t => `
+      <tr>
+        <td class="fw-medium">${t.name}</td>
+        <td><code>${t.token_prefix}</code></td>
+        <td class="text-muted">${t.rate_limit_per_minute}/phút</td>
+        <td class="text-muted">${fmtDate(t.created_at)}</td>
+        <td class="text-muted">${fmtDate(t.last_used_at)}</td>
+        <td>${t.revoked_at
+          ? `<span class="badge bg-secondary-lt">Đã thu hồi</span>`
+          : `<span class="badge bg-green-lt">Đang hoạt động</span>`}</td>
+        <td class="text-end">${t.revoked_at ? "" : `<button class="btn btn-sm btn-outline-danger" onclick="revokeToken('${t.id}')">Thu hồi</button>`}</td>
+      </tr>`).join("") : `<tr><td colspan="7" class="text-muted text-center py-4">Chưa có token nào</td></tr>`;
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
+  }
+}
+window.loadTokens = loadTokens;
+
+window.openCreateModal = function() {
+  document.getElementById("tok-name").value = "";
+  document.getElementById("tok-ratelimit").value = "120";
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-create-token")).show();
+};
+
+window.submitCreateToken = async function() {
+  const name = document.getElementById("tok-name").value.trim();
+  if (!name) return alert("⚠️ Cần đặt tên cho token");
+  const rateLimit = parseInt(document.getElementById("tok-ratelimit").value) || 120;
+  try {
+    const res = await api.post("/api/api-tokens", { name, rate_limit_per_minute: rateLimit });
+    bootstrap.Modal.getInstance(document.getElementById("modal-create-token")).hide();
+    document.getElementById("revealed-token").textContent = res.token;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-reveal-token")).show();
+  } catch (err) { alert(err.message); }
+};
+
+window.copyRevealedToken = function() {
+  const text = document.getElementById("revealed-token").textContent;
+  navigator.clipboard?.writeText(text).then(
+    () => alert("✓ Đã copy token vào clipboard"),
+    () => alert("Không copy được — hãy bôi đen token và copy thủ công")
+  );
+};
+
+window.revokeToken = async function(id) {
+  if (!confirm("Thu hồi token này? Mọi hệ thống đang dùng token này sẽ KHÔNG gọi API được nữa ngay lập tức.")) return;
+  try {
+    await api.delete(`/api/api-tokens/${id}`);
+    loadTokens();
+  } catch (err) { alert(err.message); }
+};
+
+// ── Tài liệu API — liệt kê nhóm endpoint sẵn có để tích hợp ──
+const ENDPOINT_GROUPS = [
+  { name: "Sản phẩm", items: [
+    ["GET",  "/api/products", "Danh sách sản phẩm (?search=&status=)"],
+    ["POST", "/api/products", "Tạo sản phẩm mới"],
+  ]},
+  { name: "Kho hàng", items: [
+    ["GET",  "/api/inventory", "Tồn kho hiện tại theo sản phẩm"],
+    ["POST", "/api/inventory/adjust", "Điều chỉnh tồn kho (nhập/xuất/kiểm kê)"],
+  ]},
+  { name: "Khách hàng", items: [
+    ["GET",  "/api/customers", "Danh sách khách hàng (?search=)"],
+    ["POST", "/api/customers", "Tạo khách hàng mới"],
+    ["GET",  "/api/customers/:id/debt", "Công nợ (tiền + vàng quy 99) của 1 khách"],
+    ["POST", "/api/customers/:id/debt", "Thêm bút toán điều chỉnh nợ thủ công"],
+  ]},
+  { name: "Đơn hàng", items: [
+    ["GET",  "/api/orders", "Danh sách đơn hàng (?include_quick=1&search=)"],
+    ["POST", "/api/orders", "Tạo đơn hàng mới (bán lẻ hoặc bán sỉ)"],
+    ["GET",  "/api/orders/:id", "Chi tiết 1 đơn hàng"],
+    ["PUT",  "/api/orders/:id", "Đổi trạng thái đơn, hoặc sửa hoá đơn nháp"],
+  ]},
+  { name: "Thanh toán", items: [
+    ["POST", "/api/payments", "Ghi nhận thu tiền / hoàn tiền cho 1 đơn"],
+  ]},
+  { name: "Danh mục", items: [
+    ["GET",  "/api/categories", "Danh sách danh mục sản phẩm"],
+    ["POST", "/api/categories", "Tạo danh mục mới"],
+  ]},
+  { name: "Giá vàng", items: [
+    ["GET",  "/api/gold-prices", "Lịch sử giá vàng đã lưu"],
+    ["POST", "/api/gold-prices", "Ghi nhận giá vàng mới"],
+  ]},
+  { name: "Báo cáo", items: [
+    ["GET",  "/api/reports/gold", "Báo cáo vàng (?from=&to=)"],
+  ]},
+  { name: "Mẫu hàng (bán sỉ)", items: [
+    ["GET",  "/api/item-presets", "Danh sách mẫu hàng đã lưu (?kind=custom|tradein)"],
+    ["POST", "/api/item-presets", "Lưu/cập nhật 1 mẫu hàng"],
+  ]},
+];
+
+document.getElementById("endpoint-docs").innerHTML = ENDPOINT_GROUPS.map(g => `
+  <details class="endpoint-group border-top pt-2 mt-2">
+    <summary>${g.name}</summary>
+    <div class="ps-2 pb-2">
+      ${g.items.map(([method, path, desc]) => `
+        <div class="endpoint-row d-flex gap-2 py-1">
+          <span class="method-badge badge ${method === "GET" ? "bg-blue-lt" : method === "POST" ? "bg-green-lt" : "bg-orange-lt"}">${method}</span>
+          <span class="text-nowrap">${path}</span>
+          <span class="text-muted font-monospace-off">— ${desc}</span>
+        </div>`).join("")}
+    </div>
+  </details>`).join("");
+
+loadTokens();
+</script>
+</body>
+</html>

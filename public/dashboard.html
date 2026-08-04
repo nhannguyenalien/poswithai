@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Tổng quan — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div class="page">
+  <!-- Sidebar -->
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <!-- Content -->
+  <div class="page-wrapper">
+    <div class="page-header d-print-none">
+      <div class="container-xl">
+        <h2 class="page-title">Tổng quan hôm nay</h2>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+
+        <!-- 4 thẻ số -->
+        <div class="row row-deck row-cards mb-4">
+          <div class="col-sm-6 col-lg-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="subheader">Doanh thu hôm nay</div>
+                <div class="h1 mb-0" id="stat-revenue">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="subheader">Số đơn hôm nay</div>
+                <div class="h1 mb-0" id="stat-orders">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="subheader">Tổng sản phẩm</div>
+                <div class="h1 mb-0" id="stat-products">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="subheader">Tồn kho thấp</div>
+                <div class="h1 mb-0 text-danger" id="stat-lowstock">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row row-cards">
+          <!-- Đơn gần đây -->
+          <div class="col-lg-7">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">Đơn hàng gần đây</h3></div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter">
+                  <thead><tr><th>Mã đơn</th><th>Khách</th><th>Tổng tiền</th><th>Trạng thái</th></tr></thead>
+                  <tbody id="recent-orders"><tr><td colspan="4" class="text-muted text-center py-3">Đang tải...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tồn thấp -->
+          <div class="col-lg-5">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">⚠️ Tồn kho thấp</h3></div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter">
+                  <thead><tr><th>Sản phẩm</th><th>SKU</th><th class="text-center">Tồn</th></tr></thead>
+                  <tbody id="low-stock-table"><tr><td colspan="3" class="text-muted text-center py-3">Đang tải...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND = n => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+  const statusBadge = s => {
+    const map = { pending:"bg-yellow-lt", completed:"bg-green-lt", cancelled:"bg-red-lt" };
+    const label = { pending:"Chờ thanh toán", completed:"Hoàn thành", cancelled:"Đã hủy" };
+    return `<span class="badge ${map[s]||'bg-secondary-lt'}">${label[s]||s}</span>`;
+  };
+
+  async function loadDashboard() {
+    try {
+      const [ordersData, stockData, productsData] = await Promise.all([
+        api.get("/api/orders?date=today"),
+        api.get("/api/inventory/stock"),
+        api.get("/api/products"),
+      ]);
+
+      // Thẻ số
+      const completed = ordersData.orders.filter(o => o.status === "completed");
+      document.getElementById("stat-revenue").textContent =
+        fmtVND(completed.reduce((s, o) => s + parseInt(o.total), 0));
+      document.getElementById("stat-orders").textContent = ordersData.orders.length;
+      document.getElementById("stat-products").textContent = productsData.products.length;
+      document.getElementById("stat-lowstock").textContent = stockData.low_stock.length;
+
+      // Đơn gần đây (5 cái)
+      const tbody = document.getElementById("recent-orders");
+      const recent = ordersData.orders.slice(0, 5);
+      tbody.innerHTML = recent.length
+        ? recent.map(o => `<tr>
+            <td><a href="/orders.html">${o.order_number}</a></td>
+            <td>${o.customer_name || "Khách lẻ"}</td>
+            <td>${fmtVND(o.total)}</td>
+            <td>${statusBadge(o.status)}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="4" class="text-muted text-center">Chưa có đơn hàng hôm nay</td></tr>`;
+
+      // Tồn thấp
+      const lowTbody = document.getElementById("low-stock-table");
+      lowTbody.innerHTML = stockData.low_stock.length
+        ? stockData.low_stock.map(i => `<tr>
+            <td>${i.product_name}</td>
+            <td><span class="text-muted">${i.sku}</span></td>
+            <td class="text-center"><span class="badge ${i.qty==0?'bg-red-lt':'bg-orange-lt'}">${i.qty}</span></td>
+          </tr>`).join("")
+        : `<tr><td colspan="3" class="text-success text-center">Tất cả sản phẩm đủ hàng ✓</td></tr>`;
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>
