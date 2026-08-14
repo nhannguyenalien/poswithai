@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MODEL_CACHE_DIR=/models
+    TORCH_HOME=/models
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 
 # Bake the public pretrained weights into the image so production starts predictably.
-RUN TORCH_HOME=/models python -c "from torchvision.models import MobileNet_V3_Small_Weights; MobileNet_V3_Small_Weights.DEFAULT.get_state_dict(progress=True)"
+RUN python -c "from torchvision.models import MobileNet_V3_Small_Weights; MobileNet_V3_Small_Weights.DEFAULT.get_state_dict(progress=True)"
 
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /data \
