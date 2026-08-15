@@ -74,17 +74,41 @@ class OrderRepository {
     String? customerId,
     required List<OrderCreateItem> items,
     String? notes,
+    String orderType = 'retail',
+    bool isQuick = false,
+    int discount = 0,
+    String goldPrice99 = '0',
+    String goldSold99 = '0',
+    String goldBought99 = '0',
+    String goldToMoney99 = '0',
+    int makingFeeTotal = 0,
+    List<Map<String, dynamic>>? tradeInDetails,
+    int oldMoneyDebt = 0,
+    String oldGoldDebt99 = '0',
   }) async {
     final json = await api.postJson('/orders', {
-      'order_type': 'retail',
+      'order_type': orderType,
+      'is_quick': isQuick,
       'customer_id': ?customerId,
       'items': items.map((item) => item.toJson()).toList(),
+      'discount': discount,
+      if (orderType == 'wholesale') ...{
+        'gold_price_99': goldPrice99,
+        'gold_sold_99': goldSold99,
+        'gold_bought_99': goldBought99,
+        'gold_to_money_99': goldToMoney99,
+        'making_fee_total': makingFeeTotal,
+        'trade_in_details': tradeInDetails,
+        'old_money_debt': oldMoneyDebt,
+        'old_gold_debt_99': oldGoldDebt99,
+      },
       if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
     }, idempotent: true);
     return CreateOrderResult(
       id: '${json['order_id']}',
       number: '${json['order_number']}',
       total: parseVnd(json['total']),
+      isQuick: isQuick,
     );
   }
 
@@ -109,17 +133,23 @@ class OrderCreateItem {
     required this.variantId,
     required this.quantity,
     required this.unitPrice,
+    this.itemName,
+    this.metalDetails,
   });
 
   final String variantId;
   final int quantity;
   final int unitPrice;
+  final String? itemName;
+  final Map<String, dynamic>? metalDetails;
 
   Map<String, dynamic> toJson() => {
     'product_variant_id': variantId,
     'quantity': quantity,
     'unit_price': unitPrice,
     'discount': 0,
+    if (itemName != null) 'item_name': itemName,
+    if (metalDetails != null) 'metal_details': metalDetails,
   };
 }
 
@@ -128,9 +158,11 @@ class CreateOrderResult {
     required this.id,
     required this.number,
     required this.total,
+    this.isQuick = false,
   });
 
   final String id;
   final String number;
   final int total;
+  final bool isQuick;
 }

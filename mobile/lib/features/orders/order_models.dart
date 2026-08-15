@@ -93,6 +93,11 @@ class VariantChoice {
     this.barcode,
     required this.price,
     required this.stock,
+    this.goldPurity,
+    this.goldGross,
+    this.goldStone,
+    this.goldNet,
+    this.goldMakingFee,
   });
   factory VariantChoice.fromJson(Map<String, dynamic> json) => VariantChoice(
     id: '${json['id']}',
@@ -100,10 +105,28 @@ class VariantChoice {
     barcode: json['barcode'] as String?,
     price: parseVnd(json['price']),
     stock: parseVnd(json['stock_qty']),
+    goldPurity: json['gold_type_purity']?.toString(),
+    goldGross: json['gold_gross']?.toString(),
+    goldStone: json['gold_stone']?.toString(),
+    goldNet: json['gold_net']?.toString(),
+    goldMakingFee: parseVnd(json['gold_making_fee']),
   );
   final String id;
   final String sku;
   final String? barcode;
   final int price;
   final int stock;
+  final String? goldPurity;
+  final String? goldGross;
+  final String? goldStone;
+  final String? goldNet;
+  final int? goldMakingFee;
+
+  bool get isGold => _positiveDecimal(goldGross) || _positiveDecimal(goldNet);
 }
+
+bool _positiveDecimal(String? value) =>
+    value != null &&
+    RegExp(
+      r'^\+?(?:0*[1-9]\d*)(?:\.\d+)?$|^\+?0*\.\d*[1-9]\d*$',
+    ).hasMatch(value.trim());

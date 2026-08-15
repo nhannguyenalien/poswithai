@@ -6,6 +6,7 @@ import 'order_create_page.dart';
 import 'order_detail_page.dart';
 import 'order_models.dart';
 import 'order_repository.dart';
+import 'wholesale_order_create_page.dart';
 
 class OrderListPage extends StatefulWidget {
   const OrderListPage({super.key, required this.api});
@@ -60,9 +61,38 @@ class _OrderListPageState extends State<OrderListPage> {
   }
 
   Future<void> _create() async {
+    final wholesale = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Chọn loại đơn hàng')),
+            ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: const Text('Đơn bán lẻ'),
+              subtitle: const Text('Giá bán theo từng sản phẩm'),
+              onTap: () => Navigator.pop(context, false),
+            ),
+            ListTile(
+              leading: const Icon(Icons.business_outlined),
+              title: const Text('Đơn bán sỉ'),
+              subtitle: const Text(
+                'Quy vàng 99, tiền công, hàng cũ và công nợ',
+              ),
+              onTap: () => Navigator.pop(context, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (wholesale == null || !mounted) return;
     final result = await Navigator.of(context).push<CreateOrderResult>(
       MaterialPageRoute(
-        builder: (_) => OrderCreatePage(repository: _repository),
+        builder: (_) => wholesale
+            ? WholesaleOrderCreatePage(repository: _repository)
+            : OrderCreatePage(repository: _repository),
       ),
     );
     if (result != null) {
@@ -73,7 +103,7 @@ class _OrderListPageState extends State<OrderListPage> {
             builder: (_) => OrderDetailPage(
               repository: _repository,
               orderId: result.id,
-              openPaymentOnLoad: result.total > 0,
+              openPaymentOnLoad: result.total > 0 && !result.isQuick,
             ),
           ),
         );
