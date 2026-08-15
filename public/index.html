@@ -254,6 +254,31 @@
   .step h4{ font-size:15.5px; font-weight:700; }
   .step p{ font-size:13.5px; color:var(--muted); margin-top:6px; }
 
+  /* ── APP DOWNLOADS ─────────────────────────────── */
+  .download-section{ background:#f4f1eb; }
+  .download-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+  .download-card{
+    display:flex; flex-direction:column; min-height:272px; padding:26px;
+    background:#fff; border:1px solid var(--line); border-radius:20px;
+    box-shadow:0 14px 36px -28px rgba(15,23,41,.45);
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .download-card:hover{ transform:translateY(-4px); border-color:#d5bb87; box-shadow:0 20px 42px -28px rgba(15,23,41,.55); }
+  .download-card-top{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .platform-icon{
+    width:48px; height:48px; display:flex; align-items:center; justify-content:center;
+    border-radius:14px; background:var(--navy); color:#fff; font-size:23px; font-weight:800;
+  }
+  .download-badge{ padding:5px 9px; border-radius:999px; background:#e9f8ef; color:#157347; font-size:11px; font-weight:700; }
+  .download-badge.testing{ background:#fff3d8; color:#8a611c; }
+  .download-card h3{ margin-top:20px; font-size:20px; }
+  .download-card p{ margin:8px 0 22px; color:var(--muted); font-size:13.5px; }
+  .download-card .btn{ margin-top:auto; width:100%; padding:11px 16px; font-size:13.5px; }
+  .download-footnote{ margin:24px auto 0; max-width:780px; text-align:center; color:var(--muted); font-size:13px; }
+  .download-footnote a{ color:#8a611c; font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+  @media (max-width:980px){ .download-grid{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .download-grid{ grid-template-columns:1fr; } .download-card{ min-height:240px; } }
+
   /* ── CTA BANNER ────────────────────────────────── */
   .cta-banner{
     background:linear-gradient(135deg,#1c2542,#0a0f1e); border-radius:28px; padding:64px 40px;
@@ -290,6 +315,7 @@
       <a href="#tour">Sản phẩm</a>
       <a href="#industries">Ngành nghề</a>
       <a href="#gold">Chuyên vàng bạc</a>
+      <a href="#download">Tải ứng dụng</a>
     </nav>
     <div class="nav-cta">
       <a href="/login.html" class="btn btn-outline">Đăng nhập</a>
@@ -307,8 +333,9 @@
     <div class="hero-ctas">
       <a href="/login.html" class="btn btn-gold">Bắt đầu dùng thử →</a>
       <a href="#tour" class="btn btn-ghost-dark">Xem demo sản phẩm</a>
+      <a href="#download" class="btn btn-ghost-dark">Tải ứng dụng</a>
     </div>
-    <div class="hero-note">Không cần cài đặt · Chạy trên trình duyệt · Dữ liệu lưu trữ an toàn</div>
+    <div class="hero-note">Dùng trên trình duyệt hoặc cài ứng dụng · Dữ liệu đồng bộ an toàn</div>
 
     <div class="hero-stage">
       <div class="float-card fc-1"><span class="ico">💰</span> Tồn kho cập nhật realtime</div>
@@ -595,6 +622,59 @@
   </div>
 </section>
 
+<!-- ============ APP DOWNLOADS ============ -->
+<section class="section download-section" id="download">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Ứng dụng đa nền tảng</span>
+      <h2>Tải POS cho thiết bị của bạn</h2>
+      <p>Các nút bên dưới luôn trỏ tới bản build mới nhất đã được phát hành từ hệ thống tự động.</p>
+    </div>
+    <div class="download-grid">
+      <article class="download-card">
+        <div class="download-card-top">
+          <span class="platform-icon" aria-hidden="true">⊞</span>
+          <span class="download-badge">Sẵn sàng</span>
+        </div>
+        <h3>Windows</h3>
+        <p>Windows 10/11 64-bit. Giải nén toàn bộ rồi chạy <strong>pos_mobile.exe</strong>.</p>
+        <a class="btn btn-block-dark" href="https://github.com/nhannguyenalien/poswithai/releases/download/multi-platform-latest/SpaceHuge-POS-Windows-x64.zip">Tải bản Windows ↓</a>
+      </article>
+
+      <article class="download-card">
+        <div class="download-card-top">
+          <span class="platform-icon" aria-hidden="true">●</span>
+          <span class="download-badge testing">Bản thử nghiệm</span>
+        </div>
+        <h3>macOS</h3>
+        <p>Dành cho máy Mac. Bản hiện tại chưa ký Apple Developer nên macOS có thể yêu cầu xác nhận khi mở.</p>
+        <a class="btn btn-block-dark" href="https://github.com/nhannguyenalien/poswithai/releases/download/multi-platform-latest/SpaceHuge-POS-macOS.zip">Tải bản macOS ↓</a>
+      </article>
+
+      <article class="download-card">
+        <div class="download-card-top">
+          <span class="platform-icon" aria-hidden="true">◆</span>
+          <span class="download-badge testing">APK thử nghiệm</span>
+        </div>
+        <h3>Android</h3>
+        <p>Tải APK để cài trực tiếp trên điện thoại hoặc máy tính bảng Android.</p>
+        <a class="btn btn-block-dark" href="https://github.com/nhannguyenalien/poswithai/releases/download/multi-platform-latest/SpaceHuge-POS-Android.apk">Tải APK Android ↓</a>
+      </article>
+
+      <article class="download-card">
+        <div class="download-card-top">
+          <span class="platform-icon" aria-hidden="true">●</span>
+          <span class="download-badge testing">Chưa ký</span>
+        </div>
+        <h3>iOS</h3>
+        <p>Gói build chưa ký chỉ dành cho kiểm thử kỹ thuật, chưa thể cài trực tiếp như ứng dụng App Store.</p>
+        <a class="btn btn-outline" href="https://github.com/nhannguyenalien/poswithai/releases/download/multi-platform-latest/SpaceHuge-POS-iOS-unsigned.zip">Tải bản kiểm thử ↓</a>
+      </article>
+    </div>
+    <p class="download-footnote">Cần Android App Bundle hoặc muốn xem thông tin phiên bản? <a href="https://github.com/nhannguyenalien/poswithai/releases/tag/multi-platform-latest">Mở trang phát hành mới nhất</a>. Windows và macOS cần giải nén đầy đủ trước khi chạy.</p>
+  </div>
+</section>
+
 <!-- ============ HOW IT WORKS ============ -->
 <section class="section">
   <div class="wrap">
@@ -637,6 +717,7 @@
         <a href="#features">Tính năng</a>
         <a href="#tour">Trải nghiệm</a>
         <a href="#gold">Ngành vàng bạc</a>
+        <a href="#download">Tải ứng dụng</a>
       </div>
       <div class="footer-col">
         <h5>Ngành nghề</h5>
