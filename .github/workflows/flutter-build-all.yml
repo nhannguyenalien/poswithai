@@ -1,0 +1,206 @@
+name: Build Flutter - Android, iOS, Windows, macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/windows-release
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/flutter-build-all.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flutter-build-all-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  API_BASE_URL: https://pos.schoolsai.work/api
+  GOOGLE_CLIENT_ID: 982593294309-s06qd1nq2gubgfmerugau3mft4knfqpp.apps.googleusercontent.com
+  GOOGLE_SERVER_CLIENT_ID: 982593294309-8kn816po5hg4ducspjm1fcu7lnjqimap.apps.googleusercontent.com
+
+jobs:
+  test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  android:
+    name: Android APK and AAB
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build Android APK
+        run: >-
+          flutter build apk --release
+          --dart-define=API_BASE_URL=$API_BASE_URL
+          --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
+      - name: Build Android App Bundle
+        run: >-
+          flutter build appbundle --release
+          --dart-define=API_BASE_URL=$API_BASE_URL
+          --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
+      - name: Collect Android packages
+        run: |
+          mkdir -p build/release-packages
+          cp build/app/outputs/flutter-apk/app-release.apk build/release-packages/SpaceHuge-POS-Android.apk
+          cp build/app/outputs/bundle/release/app-release.aab build/release-packages/SpaceHuge-POS-Android.aab
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: SpaceHuge-POS-Android
+          path: mobile/build/release-packages/*
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows x64
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build Windows release
+        run: >-
+          flutter build windows --release
+          --dart-define=API_BASE_URL=$env:API_BASE_URL
+          --dart-define=GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=$env:GOOGLE_SERVER_CLIENT_ID
+      - name: Package portable Windows build
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/SpaceHuge-POS-Windows-x64.zip
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: SpaceHuge-POS-Windows-x64
+          path: mobile/build/SpaceHuge-POS-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    name: macOS universal app
+    needs: test
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build macOS release
+        run: >-
+          flutter build macos --release
+          --dart-define=API_BASE_URL=$API_BASE_URL
+          --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
+      - name: Package macOS app
+        run: ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/pos_mobile.app build/SpaceHuge-POS-macOS.zip
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: SpaceHuge-POS-macOS
+          path: mobile/build/SpaceHuge-POS-macOS.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: iOS unsigned app
+    needs: test
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build iOS without code signing
+        run: >-
+          flutter build ios --release --no-codesign
+          --dart-define=API_BASE_URL=$API_BASE_URL
+          --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
+      - name: Package unsigned iOS app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/SpaceHuge-POS-iOS-unsigned.zip
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: SpaceHuge-POS-iOS-unsigned
+          path: mobile/build/SpaceHuge-POS-iOS-unsigned.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish combined GitHub prerelease
+    if: always() && needs.android.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.ios.result == 'success'
+    needs: [android, windows, macos, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish latest multi-platform build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: multi-platform-latest
+          name: SpaceHuge POS - latest multi-platform build
+          body: |
+            Automated Flutter build for Android, iOS, Windows and macOS.
+
+            Android currently uses the repository's debug signing key. The iOS
+            package is unsigned. Configure production signing before public store
+            distribution. Windows is portable; macOS may show a Gatekeeper warning
+            until Developer ID signing and notarization are configured.
+          prerelease: true
+          make_latest: false
+          files: dist/*

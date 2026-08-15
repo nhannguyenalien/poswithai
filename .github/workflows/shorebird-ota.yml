@@ -1,0 +1,89 @@
+name: Shorebird OTA - Android, iOS, Windows, macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Create the first/full release or patch an existing release
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - release
+  push:
+    branches:
+      - main
+      - codex/windows-release
+    paths:
+      - 'mobile/lib/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shorebird-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ota:
+    if: vars.SHOREBIRD_ENABLED == 'true'
+    name: ${{ matrix.operation-label }} ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            operation-label: Shorebird
+          - platform: ios
+            os: macos-latest
+            operation-label: Shorebird
+          - platform: windows
+            os: windows-latest
+            operation-label: Shorebird
+          - platform: macos
+            os: macos-latest
+            operation-label: Shorebird
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify Shorebird configuration
+        shell: bash
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+        run: |
+          test -f mobile/shorebird.yaml || { echo "Run 'shorebird init' in mobile/ and commit shorebird.yaml."; exit 1; }
+          test -n "$SHOREBIRD_TOKEN" || { echo "Add SHOREBIRD_TOKEN to GitHub Actions secrets."; exit 1; }
+
+      - name: Install Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Create Shorebird release
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'release'
+        uses: shorebirdtech/shorebird-release@v1
+        with:
+          flutter-version: latest
+          platform: ${{ matrix.platform }}
+          working-directory: mobile
+          args: >-
+            --
+            --dart-define=API_BASE_URL=https://pos.schoolsai.work/api
+            --dart-define=GOOGLE_CLIENT_ID=982593294309-s06qd1nq2gubgfmerugau3mft4knfqpp.apps.googleusercontent.com
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=982593294309-8kn816po5hg4ducspjm1fcu7lnjqimap.apps.googleusercontent.com
+
+      - name: Create Shorebird patch
+        if: github.event_name == 'push' || inputs.operation == 'patch'
+        uses: shorebirdtech/shorebird-patch@v1
+        with:
+          platform: ${{ matrix.platform }}
+          release-version: latest
+          working-directory: mobile
+          args: >-
+            --
+            --dart-define=API_BASE_URL=https://pos.schoolsai.work/api
+            --dart-define=GOOGLE_CLIENT_ID=982593294309-s06qd1nq2gubgfmerugau3mft4knfqpp.apps.googleusercontent.com
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=982593294309-8kn816po5hg4ducspjm1fcu7lnjqimap.apps.googleusercontent.com
