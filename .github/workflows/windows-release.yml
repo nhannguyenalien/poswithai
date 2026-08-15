@@ -10,7 +10,7 @@ on:
       - '.github/workflows/windows-release.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -32,12 +32,6 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
-        # Analysis is enforced locally before push. Keep a newer Windows-only
-        # analyzer diagnostic from preventing creation of the test artifact.
-        continue-on-error: true
-
       - name: Test
         run: flutter test
 
@@ -52,9 +46,21 @@ jobs:
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/SpaceHuge-POS-Windows-x64.zip
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SpaceHuge-POS-Windows-x64
           path: mobile/build/SpaceHuge-POS-Windows-x64.zip
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish public Windows download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-latest
+          name: SpaceHuge POS for Windows
+          body: |
+            Portable Windows x64 build. Download the ZIP, extract all files,
+            then run pos_mobile.exe.
+          prerelease: true
+          make_latest: false
+          files: mobile/build/SpaceHuge-POS-Windows-x64.zip
