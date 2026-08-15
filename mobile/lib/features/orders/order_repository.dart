@@ -137,7 +137,7 @@ class OrderCreateItem {
     this.metalDetails,
   });
 
-  final String variantId;
+  final String? variantId;
   final int quantity;
   final int unitPrice;
   final String? itemName;

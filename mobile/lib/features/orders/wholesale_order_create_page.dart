@@ -34,6 +34,7 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
   List<ProductChoice>? _products;
   List<VariantChoice> _variants = const [];
   final List<_WholesaleLine> _lines = [];
+  final List<_DraftLine> _draftLines = [];
   final List<_TradeInLine> _tradeIns = [];
   ProductChoice? _product;
   VariantChoice? _variant;
@@ -46,9 +47,11 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
   String? _error;
 
   int get _subtotal =>
-      _lines.fold(0, (sum, line) => sum + line.unitPrice * line.quantity);
+      _lines.fold(0, (sum, line) => sum + line.unitPrice * line.quantity) +
+      _draftLines.fold(0, (sum, line) => sum + line.unitPrice * line.quantity);
   int get _goldSoldMicro =>
-      _lines.fold(0, (sum, line) => sum + line.gold99Micro);
+      _lines.fold(0, (sum, line) => sum + line.gold99Micro) +
+      _draftLines.fold(0, (sum, line) => sum + line.gold99Micro);
   int get _goldBoughtMicro =>
       _tradeIns.fold(0, (sum, line) => sum + line.gold99Micro);
   int get _goldToMoneyMicro => _Decimal.parseMicro(_goldToMoney.text) ?? 0;
@@ -175,6 +178,10 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
       ),
     );
     if (customer == null || !mounted) return;
+    await _setCustomer(customer);
+  }
+
+  Future<void> _setCustomer(CustomerSummary customer) async {
     setState(() {
       _customer = customer;
       _oldDebt = null;
@@ -193,6 +200,206 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
     } finally {
       if (mounted) setState(() => _loadingDebt = false);
     }
+  }
+
+  Future<void> _createCustomer() async {
+    final name = TextEditingController();
+    final phone = TextEditingController();
+    final idCard = TextEditingController();
+    final address = TextEditingController();
+    final taxCode = TextEditingController();
+    final moneyDebt = TextEditingController(text: '0');
+    final goldDebt = TextEditingController(text: '0');
+    var isBusiness = false;
+    String? dialogError;
+    var submitting = false;
+    final customer = await showDialog<CustomerSummary>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Tạo khách và nhập nợ đầu kỳ'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Khách doanh nghiệp'),
+                    value: isBusiness,
+                    onChanged: submitting
+                        ? null
+                        : (value) => setDialogState(() => isBusiness = value),
+                  ),
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên khách hàng *',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Số điện thoại',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: idCard,
+                    decoration: const InputDecoration(
+                      labelText: 'CCCD / giấy tờ',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: address,
+                    decoration: const InputDecoration(labelText: 'Địa chỉ'),
+                  ),
+                  if (isBusiness) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: taxCode,
+                      decoration: const InputDecoration(
+                        labelText: 'Mã số thuế *',
+                      ),
+                    ),
+                  ],
+                  const Divider(height: 28),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Số dương: khách nợ tiệm · số âm: tiệm nợ khách',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: moneyDebt,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Nợ tiền đầu kỳ (VND)',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: goldDebt,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^-?\d{0,9}([.,]\d{0,6})?'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Nợ vàng 99 đầu kỳ (chỉ)',
+                    ),
+                  ),
+                  if (dialogError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        dialogError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final money = _parseVnd(moneyDebt.text);
+                      final goldMicro = _Decimal.parseMicro(goldDebt.text);
+                      if (name.text.trim().isEmpty ||
+                          (isBusiness && taxCode.text.trim().isEmpty) ||
+                          goldMicro == null) {
+                        setDialogState(
+                          () => dialogError = name.text.trim().isEmpty
+                              ? 'Tên khách hàng là bắt buộc'
+                              : isBusiness && taxCode.text.trim().isEmpty
+                              ? 'Khách doanh nghiệp cần mã số thuế'
+                              : 'Nợ vàng không hợp lệ',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        submitting = true;
+                        dialogError = null;
+                      });
+                      try {
+                        final repository = CustomerRepository(
+                          widget.repository.api,
+                        );
+                        final created = await repository.create(
+                          name: name.text,
+                          phone: phone.text,
+                          address: address.text,
+                          idCard: idCard.text,
+                          isBusiness: isBusiness,
+                          taxCode: taxCode.text,
+                        );
+                        if (money != 0 || goldMicro != 0) {
+                          await repository.addDebtAdjustment(
+                            customerId: created.id,
+                            moneyAmount: money,
+                            goldAmount99: _Decimal.formatMicro(goldMicro),
+                            note: 'Nợ cũ nhập lúc tạo khách',
+                          );
+                        }
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, created);
+                        }
+                      } on ApiError catch (error) {
+                        if (dialogContext.mounted) {
+                          setDialogState(() {
+                            submitting = false;
+                            dialogError = error.message;
+                          });
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Tạo và chọn'),
+            ),
+          ],
+        ),
+      ),
+    );
+    for (final controller in [
+      name,
+      phone,
+      idCard,
+      address,
+      taxCode,
+      moneyDebt,
+      goldDebt,
+    ]) {
+      controller.dispose();
+    }
+    if (customer != null && mounted) await _setCustomer(customer);
   }
 
   void _addProduct() {
@@ -343,6 +550,389 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
     if (result != null && mounted) setState(() => _tradeIns.add(result));
   }
 
+  Future<void> _addDraftLine() async {
+    final name = TextEditingController();
+    final quantity = TextEditingController(text: '1');
+    final price = TextEditingController(text: '0');
+    final purity = TextEditingController(text: '99');
+    final gross = TextEditingController();
+    final stone = TextEditingController(text: '0');
+    var isGold = true;
+    String? error;
+    final result = await showDialog<_DraftLine>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Thêm hàng nháp'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Hàng chưa có trong danh mục; chỉ được lưu trong hóa đơn nháp và không trừ tồn kho.',
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Đây là hàng vàng'),
+                    value: isGold,
+                    onChanged: (value) => setDialogState(() => isGold = value),
+                  ),
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(labelText: 'Tên hàng *'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: quantity,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Số lượng',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: price,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            labelText: isGold
+                                ? 'Tiền công / món'
+                                : 'Đơn giá VND',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (isGold) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: purity,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Tuổi vàng (%)',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: gross,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'TL vàng + hột',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: stone,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'TL hột',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final qty = int.tryParse(quantity.text) ?? 0;
+                final unitPrice = _parseVnd(price.text);
+                final p = isGold ? _Decimal.parseMicro(purity.text) ?? -1 : 0;
+                final g = isGold ? _Decimal.parseMicro(gross.text) ?? -1 : 0;
+                final s = isGold ? _Decimal.parseMicro(stone.text) ?? -1 : 0;
+                if (name.text.trim().isEmpty ||
+                    qty <= 0 ||
+                    unitPrice < 0 ||
+                    (isGold &&
+                        (p <= 0 ||
+                            p > 100 * _Decimal.scale ||
+                            g <= 0 ||
+                            s < 0 ||
+                            s > g))) {
+                  setDialogState(
+                    () => error =
+                        'Kiểm tra tên, số lượng, giá, tuổi vàng và trọng lượng',
+                  );
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _DraftLine(
+                    name: name.text.trim(),
+                    quantity: qty,
+                    unitPrice: unitPrice,
+                    purityMicro: p,
+                    grossMicro: g,
+                    stoneMicro: s,
+                  ),
+                );
+              },
+              child: const Text('Thêm hàng nháp'),
+            ),
+          ],
+        ),
+      ),
+    );
+    for (final controller in [name, quantity, price, purity, gross, stone]) {
+      controller.dispose();
+    }
+    if (result != null && mounted) setState(() => _draftLines.add(result));
+  }
+
+  Future<void> _showDebtDetails() async {
+    if (_customer == null || _oldDebt == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Công nợ · ${_customer!.name}'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _summaryRow(
+                  'Tổng nợ tiền',
+                  _debtDirection(_oldDebt!.moneyDebt),
+                  strong: true,
+                ),
+                _summaryRow(
+                  'Tổng nợ vàng 99',
+                  _goldDebtDirection(
+                    _Decimal.parseMicro(_oldDebt!.goldDebt99) ?? 0,
+                  ),
+                  strong: true,
+                ),
+                const Divider(),
+                Text(
+                  'Theo hóa đơn',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (_oldDebt!.orders.isEmpty)
+                  const Text('Chưa có hóa đơn phát sinh nợ'),
+                ..._oldDebt!.orders.map(
+                  (order) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(order.number),
+                    subtitle: Text(
+                      '${_debtDirection(order.moneyDebt)} · ${_goldDebtDirection(_Decimal.parseMicro(order.goldDebt99) ?? 0)}',
+                    ),
+                  ),
+                ),
+                const Divider(),
+                Text(
+                  'Điều chỉnh thủ công',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (_oldDebt!.adjustments.isEmpty)
+                  const Text('Chưa có điều chỉnh'),
+                ..._oldDebt!.adjustments.map(
+                  (item) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      item.note?.trim().isNotEmpty == true
+                          ? item.note!
+                          : 'Điều chỉnh công nợ',
+                    ),
+                    subtitle: Text(
+                      '${_debtDirection(item.moneyAmount)} · ${_goldDebtDirection(_Decimal.parseMicro(item.goldAmount99) ?? 0)}',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Đóng'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _addDebtAdjustment();
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Thêm nợ / điều chỉnh'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addDebtAdjustment() async {
+    final customer = _customer;
+    if (customer == null) return;
+    final money = TextEditingController(text: '0');
+    final gold = TextEditingController(text: '0');
+    final note = TextEditingController();
+    String? error;
+    var saving = false;
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Thêm nợ / điều chỉnh công nợ'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Số dương: khách nợ tiệm · số âm: tiệm nợ khách'),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: money,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                  ],
+                  decoration: const InputDecoration(labelText: 'Số tiền (VND)'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: gold,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^-?\d{0,9}([.,]\d{0,6})?'),
+                    ),
+                  ],
+                  decoration: const InputDecoration(labelText: 'Vàng 99 (chỉ)'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: note,
+                  decoration: const InputDecoration(labelText: 'Lý do *'),
+                ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () => Navigator.pop(dialogContext, false),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final moneyValue = _parseVnd(money.text);
+                      final goldMicro = _Decimal.parseMicro(gold.text);
+                      if (goldMicro == null ||
+                          (moneyValue == 0 && goldMicro == 0) ||
+                          note.text.trim().isEmpty) {
+                        setDialogState(
+                          () => error = 'Cần nhập số nợ khác 0 và lý do',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      try {
+                        await CustomerRepository(
+                          widget.repository.api,
+                        ).addDebtAdjustment(
+                          customerId: customer.id,
+                          moneyAmount: moneyValue,
+                          goldAmount99: _Decimal.formatMicro(goldMicro),
+                          note: note.text,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, true);
+                        }
+                      } on ApiError catch (apiError) {
+                        if (dialogContext.mounted) {
+                          setDialogState(() {
+                            saving = false;
+                            error = apiError.message;
+                          });
+                        }
+                      }
+                    },
+              child: saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Ghi công nợ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    money.dispose();
+    gold.dispose();
+    note.dispose();
+    if (changed == true && mounted) await _setCustomer(customer);
+  }
+
   Future<void> _save({required bool draft}) async {
     if (_customer == null) {
       setState(() => _error = 'Đơn sỉ bắt buộc phải chọn khách hàng');
@@ -352,8 +942,15 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
       setState(() => _error = 'Chưa tải xong công nợ cũ của khách hàng');
       return;
     }
-    if (_lines.isEmpty && _tradeIns.isEmpty) {
+    if (_lines.isEmpty && _draftLines.isEmpty && _tradeIns.isEmpty) {
       setState(() => _error = 'Cần có sản phẩm bán hoặc hàng cũ khách trả');
+      return;
+    }
+    if (!draft && _draftLines.isNotEmpty) {
+      setState(
+        () => _error =
+            'Toa còn hàng nháp chưa có trong danh mục. Chỉ có thể Lưu tạm, hoặc xóa hàng nháp trước khi chốt đơn.',
+      );
       return;
     }
     if (_goldToMoneyMicro.abs() > 0 && _goldPriceVnd <= 0) {
@@ -387,15 +984,22 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
         customerId: _customer!.id,
         orderType: 'wholesale',
         isQuick: draft,
-        items: _lines.map((line) => line.toOrderItem()).toList(),
+        items: [
+          ..._lines.map((line) => line.toOrderItem()),
+          ..._draftLines.map((line) => line.toOrderItem()),
+        ],
         discount: _discount,
         goldPrice99: '$_goldPriceVnd',
         goldSold99: _Decimal.formatMicro(_goldSoldMicro),
         goldBought99: _Decimal.formatMicro(_goldBoughtMicro),
         goldToMoney99: _Decimal.formatMicro(_goldToMoneyMicro),
-        makingFeeTotal: _lines
-            .where((line) => line.isGold)
-            .fold(0, (sum, line) => sum + line.unitPrice * line.quantity),
+        makingFeeTotal:
+            _lines
+                .where((line) => line.isGold)
+                .fold(0, (sum, line) => sum + line.unitPrice * line.quantity) +
+            _draftLines
+                .where((line) => line.isGold)
+                .fold(0, (sum, line) => sum + line.unitPrice * line.quantity),
         tradeInDetails: _tradeIns.map((line) => line.toJson()).toList(),
         oldMoneyDebt: _oldDebt!.moneyDebt,
         oldGoldDebt99: _oldDebt!.goldDebt99,
@@ -467,6 +1071,28 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
                     : Text(_debtLabel()),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _selectCustomer,
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _selectCustomer,
+                    icon: const Icon(Icons.person_search),
+                    label: const Text('Chọn khách'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _createCustomer,
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: const Text('Tạo khách + nợ đầu kỳ'),
+                  ),
+                  if (_customer != null && _oldDebt != null)
+                    TextButton.icon(
+                      onPressed: _showDebtDetails,
+                      icon: const Icon(Icons.account_balance_wallet_outlined),
+                      label: const Text('Chi tiết / thêm công nợ'),
+                    ),
+                ],
               ),
               const Divider(height: 28),
               Text(
@@ -565,6 +1191,53 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
                 label: const Text('Thêm vào toa'),
               ),
               ...List.generate(_lines.length, (index) => _lineTile(index)),
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Hàng nháp chưa có trong danh mục',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _addDraftLine,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Thêm'),
+                          ),
+                        ],
+                      ),
+                      const Text(
+                        'Không trừ tồn kho và bắt buộc lưu toa ở trạng thái nháp.',
+                      ),
+                      ...List.generate(_draftLines.length, (index) {
+                        final line = _draftLines[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('${line.name} × ${line.quantity}'),
+                          subtitle: Text(
+                            line.isGold
+                                ? 'Vàng thực ${_Decimal.formatMicro(line.netMicro)} chỉ · quy 99 ${_Decimal.formatMicro(line.gold99Micro)} chỉ · công ${formatVnd(line.unitPrice * line.quantity)}'
+                                : formatVnd(line.unitPrice * line.quantity),
+                          ),
+                          trailing: IconButton(
+                            onPressed: () =>
+                                setState(() => _draftLines.removeAt(index)),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
               const Divider(height: 28),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -888,6 +1561,48 @@ class _TradeInLine {
     'weight': _Decimal.formatMicro(netMicro),
     'conv99': _Decimal.formatMicro(gold99Micro),
   };
+}
+
+class _DraftLine {
+  const _DraftLine({
+    required this.name,
+    required this.quantity,
+    required this.unitPrice,
+    required this.purityMicro,
+    required this.grossMicro,
+    required this.stoneMicro,
+  });
+
+  final String name;
+  final int quantity;
+  final int unitPrice;
+  final int purityMicro;
+  final int grossMicro;
+  final int stoneMicro;
+  bool get isGold => purityMicro > 0;
+  int get netMicro => grossMicro - stoneMicro;
+  int get gold99Micro => isGold
+      ? ((netMicro * quantity * purityMicro) / (99 * _Decimal.scale)).round()
+      : 0;
+
+  OrderCreateItem toOrderItem() => OrderCreateItem(
+    variantId: null,
+    quantity: quantity,
+    unitPrice: unitPrice,
+    itemName: name,
+    metalDetails: isGold
+        ? {
+            'metalType': 'gold',
+            'purity': _Decimal.formatMicro(purityMicro),
+            'basePurity': 99,
+            'grossWeight': _Decimal.formatMicro(grossMicro),
+            'stoneWeight': _Decimal.formatMicro(stoneMicro),
+            'netWeight': _Decimal.formatMicro(netMicro),
+            'unit': 'chỉ',
+            'conv99': _Decimal.formatMicro(gold99Micro),
+          }
+        : null,
+  );
 }
 
 class _Decimal {

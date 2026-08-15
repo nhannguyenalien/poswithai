@@ -33,6 +33,9 @@ class CustomerRepository {
     String? phone,
     String? email,
     String? address,
+    String? idCard,
+    bool isBusiness = false,
+    String? taxCode,
   }) async {
     final json = await api.postJson('/customers', {
       'name': name.trim(),
@@ -40,6 +43,10 @@ class CustomerRepository {
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       if (address != null && address.trim().isNotEmpty)
         'address': address.trim(),
+      if (idCard != null && idCard.trim().isNotEmpty) 'id_card': idCard.trim(),
+      'is_business': isBusiness,
+      if (taxCode != null && taxCode.trim().isNotEmpty)
+        'tax_code': taxCode.trim(),
     });
     return CustomerSummary.fromJson(json);
   }
