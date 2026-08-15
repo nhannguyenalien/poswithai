@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_error.dart';
 import '../../core/config/app_config.dart';
 import '../../core/storage/token_store.dart';
+import 'windows_google_oauth.dart';
 
 class AuthController extends ChangeNotifier {
   AuthController({required this.api, required this.tokenStore});
@@ -68,15 +69,22 @@ class AuthController extends ChangeNotifier {
           message: 'Bản cài đặt chưa có Google OAuth Client ID.',
         );
       }
-      if (!_googleInitialized) {
-        await GoogleSignIn.instance.initialize(
+      final String? idToken;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+        idToken = await const WindowsGoogleOAuth().authenticate(
           clientId: AppConfig.googleClientId,
-          serverClientId: AppConfig.googleServerClientId,
         );
-        _googleInitialized = true;
+      } else {
+        if (!_googleInitialized) {
+          await GoogleSignIn.instance.initialize(
+            clientId: AppConfig.googleClientId,
+            serverClientId: AppConfig.googleServerClientId,
+          );
+          _googleInitialized = true;
+        }
+        final account = await GoogleSignIn.instance.authenticate();
+        idToken = account.authentication.idToken;
       }
-      final account = await GoogleSignIn.instance.authenticate();
-      final idToken = account.authentication.idToken;
       if (idToken == null) {
         throw const ApiError(
           code: 'GOOGLE_TOKEN_MISSING',
@@ -99,8 +107,12 @@ class AuthController extends ChangeNotifier {
       return true;
     } on GoogleSignInException catch (error) {
       if (error.code != GoogleSignInExceptionCode.canceled) {
-        errorMessage = 'Không thể đăng nhập Google: ${error.description ?? error.code.name}';
+        errorMessage =
+            'Không thể đăng nhập Google: ${error.description ?? error.code.name}';
       }
+      return false;
+    } on WindowsGoogleOAuthException catch (error) {
+      errorMessage = error.message;
       return false;
     } on ApiError catch (error) {
       errorMessage = error.message;
@@ -125,11 +137,17 @@ class AuthController extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      final result = await api.postJson('/setup', {
-        'tenant_name': shopName.trim(),
-        'tenant_slug': shopSlug.trim().toLowerCase(),
-        if (password != null && password.isNotEmpty) 'admin_password': password,
-      }, authenticated: false, bearerToken: token);
+      final result = await api.postJson(
+        '/setup',
+        {
+          'tenant_name': shopName.trim(),
+          'tenant_slug': shopSlug.trim().toLowerCase(),
+          if (password != null && password.isNotEmpty)
+            'admin_password': password,
+        },
+        authenticated: false,
+        bearerToken: token,
+      );
       await _saveSession(result);
       setupToken = null;
       return true;
