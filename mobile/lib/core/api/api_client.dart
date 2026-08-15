@@ -89,7 +89,7 @@ class ApiClient {
       if (response.statusCode == 401 &&
           allowRefresh &&
           await _refreshSession()) {
-        return postMultipart(
+        return await postMultipart(
           path,
           field: field,
           filePath: filePath,
@@ -149,7 +149,7 @@ class ApiClient {
 
         if (response.statusCode == 401 && authenticated && allowRefresh) {
           if (await _refreshSession()) {
-            return _sendJson(
+            return await _sendJson(
               method,
               path,
               body: body,
