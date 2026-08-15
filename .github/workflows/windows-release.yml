@@ -1,0 +1,57 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/windows-release
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/windows-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Windows release
+        run: >-
+          flutter build windows --release
+          --dart-define=API_BASE_URL=https://pos.schoolsai.work/api
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=982593294309-8kn816po5hg4ducspjm1fcu7lnjqimap.apps.googleusercontent.com
+
+      - name: Package portable build
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/SpaceHuge-POS-Windows-x64.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceHuge-POS-Windows-x64
+          path: mobile/build/SpaceHuge-POS-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
