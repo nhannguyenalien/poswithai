@@ -1587,7 +1587,7 @@ window.createWholesaleOrder = async function() {
   const thisOrderNetPreview = total - paidSignedPreview;
   const combinedNetPreview = thisOrderNetPreview + oldMoneyDebt;
   const previewMoneyDebt = Math.abs(combinedNetPreview);
-  const previewGoldDebt = (goldSold99 - goldBought99) - goldToMoney99 + oldGoldDebt99;
+  const previewGoldDebt = (goldSold99 - goldBought99) - goldToMoney99 + Number(oldGoldDebt99 || 0);
   const hasGoldActivity = goldSold99 > 0 || goldBought99 > 0;
 
   document.getElementById("cf-cust-name").textContent = lastDebtData?.custName || custSearch.value || "";
