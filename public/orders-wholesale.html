@@ -18,6 +18,7 @@
     .metal-field input { font-weight: 600; }
     .metal-badge { font-size: 11px; }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -1072,7 +1073,7 @@ window.calcTotal = function() {
 
   // Cộng dồn nợ vàng cũ (đã hiện lúc chọn khách) vào số nợ vàng cuối cùng, giống nợ tiền
   // ở dưới — không đổi gold_debt_99 lưu vào đơn, chỉ gộp lúc hiển thị.
-  const oldGoldDebt99 = lastDebtData ? (lastDebtData.gold_debt_99 || 0) : 0;
+  const oldGoldDebt99 = lastDebtData ? (parseFloat(lastDebtData.gold_debt_99) || 0) : 0;
   const combinedGoldDebt99 = goldDebt99 + oldGoldDebt99;
 
   const debtEl = document.getElementById("gold-debt-show");
@@ -1252,7 +1253,7 @@ window.openCustomerDebtModal = function() {
       <td class="text-end">${fmtVND(o.total)}</td>
       <td class="text-end">${fmtVND(o.paid)}</td>
       <td class="text-end ${o.money_debt !== 0 ? "text-danger fw-bold" : "text-muted"}">${o.money_debt !== 0 ? fmtVND(o.money_debt_direction === "shop_owes" ? -o.money_debt : o.money_debt) : "—"}</td>
-      <td class="text-end ${Math.abs(o.gold_debt_99) > 0.0005 ? "text-danger fw-bold" : "text-muted"}">${Math.abs(o.gold_debt_99) > 0.0005 ? o.gold_debt_99.toFixed(3) + " chỉ" : "—"}</td>
+      <td class="text-end ${Math.abs(o.gold_debt_99) > 0.0005 ? "text-danger fw-bold" : "text-muted"}">${Math.abs(o.gold_debt_99) > 0.0005 ? parseFloat(o.gold_debt_99).toFixed(3) + " chỉ" : "—"}</td>
       <td>${statusLabel(o.status)}</td>
       <td><a href="/orders-list.html?open=${o.id}&include_quick=1" target="_blank" class="btn btn-sm btn-ghost-secondary">Xem</a></td>
     </tr>`).join("") : `<tr><td colspan="9" class="text-muted text-center py-3">Không có đơn nào góp phần vào công nợ</td></tr>`;
@@ -1263,7 +1264,7 @@ window.openCustomerDebtModal = function() {
       <td class="text-muted">${new Date(a.created_at).toLocaleDateString("vi-VN")}</td>
       <td>${a.note || "<span class='text-muted'>—</span>"}</td>
       <td class="text-end ${a.money_amount !== 0 ? (a.money_amount > 0 ? "text-danger" : "text-success") + " fw-bold" : "text-muted"}">${a.money_amount !== 0 ? fmtVND(a.money_amount) : "—"}</td>
-      <td class="text-end ${Math.abs(a.gold_amount_99) > 0.0005 ? (a.gold_amount_99 > 0 ? "text-danger" : "text-success") + " fw-bold" : "text-muted"}">${Math.abs(a.gold_amount_99) > 0.0005 ? a.gold_amount_99.toFixed(3) + " chỉ" : "—"}</td>
+      <td class="text-end ${Math.abs(a.gold_amount_99) > 0.0005 ? (a.gold_amount_99 > 0 ? "text-danger" : "text-success") + " fw-bold" : "text-muted"}">${Math.abs(a.gold_amount_99) > 0.0005 ? parseFloat(a.gold_amount_99).toFixed(3) + " chỉ" : "—"}</td>
       <td><button class="btn btn-sm btn-ghost-danger" onclick="removeDebtAdjustment('${a.id}')">✕</button></td>
     </tr>`).join("") : `<tr><td colspan="5" class="text-muted text-center py-2">Chưa có bút toán nào</td></tr>`;
 
@@ -1282,7 +1283,7 @@ window.collectGoldDebt = async function() {
   if (!custId) return alert("Chưa chọn khách hàng");
   const amount = parseFloat(document.getElementById("gold-collect-amount").value) || 0;
   if (amount <= 0) return alert("Nhập số chỉ thu được (lớn hơn 0)");
-  const currentGoldDebt = lastDebtData?.gold_debt_99 || 0;
+  const currentGoldDebt = parseFloat(lastDebtData?.gold_debt_99) || 0;
   if (amount > currentGoldDebt + 0.0005) {
     if (!confirm(`Khách chỉ đang nợ ${currentGoldDebt.toFixed(3)} chỉ, số bạn nhập (${amount.toFixed(3)} chỉ) lớn hơn số đang nợ.\n\nVẫn ghi nhận?`)) return;
   }
@@ -1548,7 +1549,7 @@ function buildWholesalePayload() {
   // đã bao gồm luôn chính đơn đang sửa (do API công nợ cộng dồn mọi đơn pending), nếu
   // lấy lại sẽ bị tính trùng nợ của chính đơn này vào "nợ cũ" của nó.
   const oldMoneyDebt   = isEditing ? editingOldDebt.money_debt      : (lastDebtData?.money_debt || 0);
-  const oldGoldDebt99  = isEditing ? editingOldDebt.gold_debt_99    : (lastDebtData?.gold_debt_99 || 0);
+  const oldGoldDebt99  = isEditing ? editingOldDebt.gold_debt_99    : (parseFloat(lastDebtData?.gold_debt_99) || 0);
 
   const payload = {
     customer_id: custId,
