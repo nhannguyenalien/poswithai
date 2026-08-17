@@ -16,10 +16,24 @@ export function printReceipt(orderId) {
  * In hoá đơn A4 cho đơn bán lẻ hoặc bán sỉ.
  * @param {string} orderId
  * @param {"retail"|"wholesale"} type
+ * @param {Window} [win] - cửa sổ đã mở sẵn (xem openPendingPrintWindow) để điều hướng vào,
+ *   thay vì mở mới — tránh bị trình duyệt chặn popup khi gọi sau các lệnh await.
  */
-export function printInvoiceA4(orderId, type = "retail") {
+export function printInvoiceA4(orderId, type = "retail", win) {
   const url = `/print/invoice-a4.html?order_id=${orderId}&type=${type}`;
-  openPrint(url, 900, 700);
+  if (win) win.location.href = url;
+  else openPrint(url, 900, 700);
+}
+
+/**
+ * Mở sẵn 1 cửa sổ trống NGAY lúc người dùng click (trước khi có lệnh await nào) — trình
+ * duyệt chỉ cho window.open() không bị chặn popup khi gọi trực tiếp trong lúc xử lý sự
+ * kiện người dùng; gọi sau khi đã await API thường bị chặn âm thầm, không báo lỗi gì cả.
+ * Điều hướng cửa sổ này vào URL thật sau khi có kết quả bằng printInvoiceA4(...,...,win)
+ * hoặc printReceipt(...,win).
+ */
+export function openPendingPrintWindow(w = 900, h = 700) {
+  return openPrint("about:blank", w, h);
 }
 
 /**
@@ -45,6 +59,6 @@ export function printSingleLabel(variantId, copies = 1) {
 function openPrint(url, w = 800, h = 700) {
   const left = Math.round((screen.width  - w) / 2);
   const top  = Math.round((screen.height - h) / 2);
-  window.open(url, "_blank",
+  return window.open(url, "_blank",
     `width=${w},height=${h},left=${left},top=${top},toolbar=0,scrollbars=1`);
 }

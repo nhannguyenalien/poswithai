@@ -584,7 +584,7 @@
 import { requireLogin } from "/js/auth.js";
   import { initSidebar } from "/js/sidebar.js";
 import { api } from "/js/api.js";
-import { printInvoiceA4 } from "/js/print.js";
+import { printInvoiceA4, openPendingPrintWindow } from "/js/print.js";
 
 requireLogin();
   initSidebar();
@@ -1617,7 +1617,12 @@ window.submitOrderConfirmed = async function() {
   const payload = pendingOrderPayload;
   const meta = pendingOrderMeta;
   if (!payload || !meta) return;
-  await doSubmitOrder(payload, { ...meta, print: true });
+  // Mở cửa sổ in NGAY lúc click (trước khi await API tạo đơn) — mở sau khi đã await dễ bị
+  // trình duyệt âm thầm chặn popup (không có lỗi/cảnh báo gì), khiến bấm "Lưu & In" xong
+  // không thấy bảng in hiện lên (xem openPendingPrintWindow trong /js/print.js). Không mở
+  // khi đang SỬA hoá đơn nháp — luồng đó không in, chỉ redirect sang Danh sách đơn.
+  const printWin = meta.isEditing ? null : openPendingPrintWindow(900, 700);
+  await doSubmitOrder(payload, { ...meta, print: true, printWin });
 };
 
 // "Lưu tạm — hoàn thành sau": lưu ngay thành hoá đơn nháp (is_quick=true — ẩn khỏi DS
@@ -1638,7 +1643,7 @@ window.saveWholesaleDraft = async function() {
 };
 
 async function doSubmitOrder(payload, meta) {
-  const { isEditing, rawPayAmt, print, draft } = meta;
+  const { isEditing, rawPayAmt, print, draft, printWin } = meta;
 
   const btn = document.getElementById("submit-order-btn");
   const draftBtn = document.getElementById("save-draft-btn");
@@ -1672,7 +1677,7 @@ async function doSubmitOrder(payload, meta) {
     }
 
     // In A4 ngay sau khi tạo — bỏ qua nếu chỉ "Lưu tạm" (đơn còn dở, chưa cần in).
-    if (print) printInvoiceA4(orderId, "wholesale");
+    if (print) printInvoiceA4(orderId, "wholesale", printWin);
 
     const debtMsg = Math.abs(orderRes.gold_debt_99 || 0) > 0.0005
       ? ` Nợ vàng còn lại: ${orderRes.gold_debt_99.toFixed(3)} chỉ.` : "";
@@ -1700,6 +1705,7 @@ async function doSubmitOrder(payload, meta) {
       ? `✅ Đã lưu tạm hoá đơn nháp ${orderRes.order_number}. Vào "Danh sách đơn" → "Sửa hoá đơn nháp" để hoàn thành sau.`
       : `✅ Đã tạo đơn ${orderRes.order_number}.${debtMsg} Cửa sổ in đang mở...`);
   } catch (err) {
+    printWin?.close();
     alert("Lỗi: " + err.message);
   } finally {
     btn.disabled = false; btn.textContent = isEditing ? "💾 Cập nhật hoá đơn nháp" : "📄 Tạo đơn & In A4";
