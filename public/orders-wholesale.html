@@ -1305,7 +1305,7 @@ window.addDebtAdjustment = async function() {
   const moneyAmount = parseInt(document.getElementById("adj-money").value) || 0;
   const goldAmount  = parseFloat(document.getElementById("adj-gold").value) || 0;
   const note        = document.getElementById("adj-note").value.trim();
-  if (!moneyAmount && !goldAmount) return alert("Cần nhập ít nhất 1 trong 2: nợ tiền hoặc nợ vàng");
+  if (!moneyAmount && !goldAmount && !note) return alert("Cần nhập ít nhất 1 trong 3: nợ tiền, nợ vàng, hoặc ghi chú");
   try {
     await api.post(`/api/customers/${custId}/debt`, {
       money_amount: moneyAmount, gold_amount_99: goldAmount, note: note || null,
