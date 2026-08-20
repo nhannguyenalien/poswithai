@@ -3,7 +3,7 @@
 // DELETE /api/gold/orders/:id  — huỷ phiếu đặt hàng
 import { getDb, json, errorJson, handleOptions } from "../../../_db.js";
 import { requireAuth } from "../../../_auth.js";
-import { ensureCustomerSupportLink, syncCustomerSupportContext } from "../../../_support-chat.js";
+import { ensureCustomerSupportLink, syncCustomerSupportContext, sendSupportChatMessage } from "../../../_support-chat.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -62,7 +62,8 @@ async function updateOrder({ request, env }, { tenantId }, id) {
   const now  = new Date().toISOString();
 
   const existingRows = await sql`
-    SELECT total_amount, deposit_amount, customer_id FROM gold_orders WHERE id = ${id} AND tenant_id = ${tenantId} LIMIT 1
+    SELECT total_amount, deposit_amount, customer_id, status AS current_status,
+           order_number FROM gold_orders WHERE id = ${id} AND tenant_id = ${tenantId} LIMIT 1
   `;
   if (!existingRows.length) return errorJson("Không tìm thấy phiếu đặt hàng", 404);
 
@@ -83,11 +84,23 @@ async function updateOrder({ request, env }, { tenantId }, id) {
   if (!rows.length) return errorJson("Không tìm thấy phiếu đặt hàng", 404);
 
   // Đẩy lại context mới nhất (trạng thái vừa đổi) lên bot — khách quét QR/nhắn bot ngay
-  // sau đó sẽ thấy đúng tình trạng mới, dù hệ thống không tự nhắn tin trước cho khách
-  // được (API hiện tại chỉ có tạo link chat + đẩy context, chưa có gửi tin chủ động).
+  // sau đó sẽ thấy đúng tình trạng mới.
   if (existingRows[0].customer_id) {
     try { await syncCustomerSupportContext(sql, env, tenantId, existingRows[0].customer_id); }
     catch (err) { console.error("Không đồng bộ được context sau khi đổi trạng thái phiếu:", err.message); }
+  }
+
+  // Báo chủ động cho khách qua bot chat khi phiếu VỪA chuyển sang "Đã xong" (không gửi
+  // lại nếu status không đổi, hoặc bị set lại 'ready' trong 1 lần PUT khác không đổi gì).
+  if (existingRows[0].customer_id && status === "ready" && existingRows[0].current_status !== "ready") {
+    try {
+      await sendSupportChatMessage(
+        sql, env, tenantId, existingRows[0].customer_id,
+        `Phiếu gia công ${existingRows[0].order_number} của bạn đã xong, mời bạn ghé cửa hàng lấy hàng nhé!`,
+      );
+    } catch (err) {
+      console.error("Không gửi được tin báo đã xong cho khách:", err.message);
+    }
   }
 
   return json(rows[0]);

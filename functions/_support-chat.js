@@ -1,5 +1,6 @@
 const CHAT_LINK_ENDPOINT = "https://knowledge-worker.toidayhoc.workers.dev/api/v1/chat-link";
 const CUSTOMER_CONTEXT_ENDPOINT = "https://knowledge-worker.toidayhoc.workers.dev/api/v1/customer-context";
+const MESSAGES_ENDPOINT = "https://knowledge-worker.toidayhoc.workers.dev/api/v1/messages";
 
 export async function getKnowledgeWorkerToken(sql, env, tenantId) {
   const rows = await sql`
@@ -149,6 +150,36 @@ export async function syncCustomerSupportContext(sql, env, tenantId, customerId,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Không đồng bộ được dữ liệu khách (${response.status})`);
+  return data;
+}
+
+/**
+ * Chủ động gửi 1 tin nhắn cho khách qua bot chat (VD báo "đơn đã xong, mời ghé lấy").
+ * Yêu cầu khách đã có support_chat_session (tạo qua createSupportChatLink/
+ * ensureCustomerSupportLink trước đó, hoặc khách đã tự chat ít nhất 1 lần) — nếu chưa có
+ * session, PocketBase phía bot sẽ không tìm thấy phiên và trả 404, nên bỏ qua thay vì lỗi
+ * (best-effort, không được chặn luồng chính đang gọi hàm này, VD đổi trạng thái đơn).
+ */
+export async function sendSupportChatMessage(sql, env, tenantId, customerId, text, session = null) {
+  let supportSession = session;
+  if (!supportSession) {
+    const rows = await sql`
+      SELECT support_chat_session FROM customers
+      WHERE id = ${customerId} AND tenant_id = ${tenantId} LIMIT 1
+    `;
+    supportSession = rows[0]?.support_chat_session;
+  }
+  if (!supportSession) return { skipped: true };
+  const token = await getKnowledgeWorkerToken(sql, env, tenantId);
+  if (!token) return { skipped: true };
+
+  const response = await fetch(MESSAGES_ENDPOINT, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ session: supportSession, text }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Không gửi được tin nhắn (${response.status})`);
   return data;
 }
 
