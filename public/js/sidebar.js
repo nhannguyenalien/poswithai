@@ -18,6 +18,7 @@ const NAV = [
   { href: "/import.html",           icon: "📥", label: "Import" },
   "divider",
   { href: "/gold-prices.html",      icon: "💰", label: "Giá Vàng" },
+  { href: "/gold-orders.html",      icon: "📝", label: "Gia Công" },
   { href: "/gold-invoices.html",    icon: "📋", label: "HĐ Vàng" },
   { href: "/api-tokens.html",       icon: "🔑", label: "API" },
   { href: "/backup.html",           icon: "💾", label: "Sao lưu" },
@@ -51,6 +52,19 @@ export function initSidebar() {
         <a href="/dashboard.html">🏪 POS</a>
       </h1>
       <div class="collapse navbar-collapse" id="sidebar-menu">
+        <div id="sidebar-language-slot" class="px-3 pt-3 pb-2">
+          <div id="pos-language-switcher" class="is-sidebar" data-no-i18n>
+            <label for="pos-language-select" title="Ngôn ngữ">🌐</label>
+            <select id="pos-language-select" aria-label="Ngôn ngữ">
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+              <option value="en">🇬🇧 English</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="es">🇪🇸 Español</option>
+            </select>
+          </div>
+        </div>
         <ul class="navbar-nav pt-lg-3">${items}</ul>
         <div class="mt-auto pb-3 px-3 border-top pt-3">
           <div class="d-flex align-items-center gap-2">
@@ -64,6 +78,9 @@ export function initSidebar() {
   // Inject vào thẻ <aside> có sẵn trong trang
   const aside = document.querySelector("aside.navbar-vertical");
   if (aside) aside.innerHTML = html;
+
+  // Đưa bộ chọn ngôn ngữ vào thanh menu sau khi sidebar được render.
+  window.i18n?.mountSelector?.();
 
   // Setup logout
   renderUserInfo();

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <title>Bill gia công</title>
+  <style>
+    /* ── THERMAL RECEIPT 80mm ── */
+    @page {
+      size: 80mm auto;
+      margin: 2mm 3mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11pt;
+      width: 76mm;
+      color: #000;
+      background: #fff;
+    }
+    .center  { text-align: center; }
+    .right   { text-align: right; }
+    .bold    { font-weight: bold; }
+    .large   { font-size: 14pt; }
+    .small   { font-size: 9pt; }
+    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
+
+    table { width: 100%; border-collapse: collapse; }
+    td    { vertical-align: top; padding: 1px 0; }
+    .col-name  { width: 46%; }
+    .col-qty   { width: 10%; text-align: center; }
+    .col-weight{ width: 20%; text-align: right; }
+    .col-total { width: 24%; text-align: right; }
+
+    .summary-row td { padding: 2px 0; }
+    .summary-label  { width: 55%; }
+    .summary-value  { width: 45%; text-align: right; font-weight: bold; }
+
+    .total-row td { font-size: 13pt; font-weight: bold; padding: 3px 0; }
+    .debt-row  td { color: #000; font-weight: bold; }
+
+    .footer { margin-top: 8px; font-size: 9pt; text-align: center; }
+    .sign-row { margin-top: 14px; }
+    .sign-row td { text-align: center; font-size: 9pt; padding-top: 30px; }
+    .no-print { display: none; }
+
+    @media screen {
+      body { margin: 20px auto; border: 1px dashed #ccc; padding: 10px; }
+      .no-print {
+        display: block;
+        position: fixed; top: 0; left: 0; right: 0;
+        background: #333; color: #fff;
+        padding: 8px; text-align: center;
+      }
+      .no-print button {
+        background: #e8b84b; border: none; padding: 6px 16px;
+        border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 4px;
+      }
+      .no-print button.green { background: #4caf50; color: #fff; }
+      body { margin-top: 50px; }
+    }
+  </style>
+  <script src="/js/i18n.js"></script>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="green" onclick="window.print()">🖨️ In ngay</button>
+  <button onclick="window.close()">✕ Đóng</button>
+  <span id="screen-note" style="font-size:12px; margin-left:12px;"></span>
+</div>
+
+<div id="receipt">
+  <div class="center bold large" id="shop-name">Đang tải...</div>
+</div>
+
+<script type="module">
+import { getToken } from "/js/auth.js";
+
+const params  = new URLSearchParams(location.search);
+const orderId = params.get("order_id");
+
+async function load() {
+  if (!orderId) { document.getElementById("receipt").textContent = "Thiếu order_id"; return; }
+
+  const [orderRes, settingsRes] = await Promise.all([
+    fetch(`/api/gold/orders/${orderId}`, { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json()),
+    fetch("/api/settings",               { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json()).catch(() => ({ settings: {} })),
+  ]);
+
+  const { order, items } = orderRes;
+  const settings = settingsRes.settings || {};
+  const shopName  = settings.shop_name  || "CỬA HÀNG";
+  const shopAddr  = settings.shop_address || "";
+  const shopPhone = settings.shop_phone  || "";
+
+  const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0));
+  const fmtG3  = n => Number(n || 0).toFixed(3);
+
+  const statusLabel = { pending: "Đang làm", ready: "Đã xong", delivered: "Đã giao", cancelled: "Đã huỷ" }[order.status] || order.status;
+
+  document.getElementById("receipt").innerHTML = `
+    <div class="center bold large">${shopName}</div>
+    ${shopAddr  ? `<div class="center small">${shopAddr}</div>`  : ""}
+    ${shopPhone ? `<div class="center small">ĐT: ${shopPhone}</div>` : ""}
+    <div class="divider-solid"></div>
+
+    <div class="center bold" style="font-size:13pt;">PHIẾU GIA CÔNG</div>
+    <div class="divider"></div>
+
+    <table>
+      <tr><td>Số phiếu:</td><td class="right bold">${order.order_number}</td></tr>
+      <tr><td>Ngày đặt:</td><td class="right">${order.order_date}</td></tr>
+      ${order.expected_date ? `<tr><td>Hẹn giao:</td><td class="right bold">${order.expected_date}</td></tr>` : ""}
+      <tr><td>Trạng thái:</td><td class="right">${statusLabel}</td></tr>
+      ${order.customer_name  ? `<tr><td>Khách:</td><td class="right">${order.customer_name}</td></tr>`  : ""}
+      ${order.customer_phone ? `<tr><td>SĐT:</td><td class="right">${order.customer_phone}</td></tr>` : ""}
+    </table>
+    <div class="divider"></div>
+
+    <table>
+      <thead>
+        <tr class="bold small">
+          <td class="col-name">Món</td>
+          <td class="col-qty">SL</td>
+          <td class="col-weight">TL(chỉ)</td>
+          <td class="col-total">T.Tiền</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${(items || []).map(item => `
+          <tr>
+            <td class="col-name">${item.product_name}${item.description ? `<br/><span class="small" style="color:#444">${item.description}</span>` : ""}</td>
+            <td class="col-qty">${item.quantity}</td>
+            <td class="col-weight">${fmtG3(item.weight)}</td>
+            <td class="col-total">${fmtVND(item.amount)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <div class="divider-solid"></div>
+
+    <table>
+      <tr class="total-row">
+        <td>TỔNG DỰ KIẾN:</td>
+        <td class="right">${fmtVND(order.total_amount)} đ</td>
+      </tr>
+    </table>
+    <div class="divider"></div>
+
+    <table class="summary-row">
+      <tr><td class="summary-label">Đã cọc:</td><td class="summary-value">${fmtVND(order.deposit_amount)} đ</td></tr>
+      <tr class="debt-row"><td class="summary-label bold">CÒN LẠI KHI GIAO:</td><td class="summary-value">${fmtVND(order.remaining_amount)} đ</td></tr>
+    </table>
+    <div class="divider-solid"></div>
+
+    ${order.notes ? `<div class="small">Ghi chú: ${order.notes}</div><div class="divider"></div>` : ""}
+
+    <table class="sign-row">
+      <tr>
+        <td>KHÁCH HÀNG<br/><span class="small">(Ký, ghi rõ họ tên)</span></td>
+        <td>NGƯỜI LẬP PHIẾU<br/><span class="small">(Ký tên)</span></td>
+      </tr>
+    </table>
+
+    <div class="footer">
+      Vui lòng giữ phiếu để đối chiếu khi nhận hàng.
+    </div>
+    <div style="height:10mm"></div>
+  `;
+
+  document.getElementById("screen-note").textContent = `Phiếu: ${order.order_number}`;
+  setTimeout(() => window.print(), 500);
+}
+
+load().catch(err => {
+  document.getElementById("receipt").textContent = "Lỗi: " + err.message;
+});
+</script>
+</body>
+</html>

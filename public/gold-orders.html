@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Gia Công — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <script src="/js/i18n.js"></script>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+  </aside>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="container-xl">
+        <div class="row align-items-center">
+          <div class="col"><h2 class="page-title">Gia Công</h2></div>
+          <div class="col-auto">
+            <a href="/gold-order.html" class="btn btn-primary">+ Lập phiếu gia công mới</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="container-xl">
+
+        <!-- Cảnh báo phiếu sắp/đã tới hẹn giao mà chưa xong -->
+        <div id="due-alert" class="alert alert-warning d-none"></div>
+
+        <!-- Bộ lọc -->
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col">
+                <input id="search" type="text" class="form-control" placeholder="Tìm theo số phiếu, tên khách, SĐT..."/>
+              </div>
+              <div class="col-auto">
+                <select id="filter-status" class="form-select">
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="pending">Đang làm</option>
+                  <option value="ready">Đã xong</option>
+                  <option value="delivered">Đã giao</option>
+                  <option value="cancelled">Đã huỷ</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <input id="filter-from" type="date" class="form-control" placeholder="Từ ngày"/>
+              </div>
+              <div class="col-auto">
+                <input id="filter-to" type="date" class="form-control" placeholder="Đến ngày"/>
+              </div>
+              <div class="col-auto">
+                <button class="btn" onclick="loadOrders()">Lọc</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bảng phiếu gia công -->
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter">
+              <thead>
+                <tr>
+                  <th>Số phiếu</th>
+                  <th>Ngày đặt</th>
+                  <th>Khách hàng</th>
+                  <th>SĐT</th>
+                  <th>Hẹn giao</th>
+                  <th class="text-end">Tổng dự kiến</th>
+                  <th class="text-end">Đã cọc</th>
+                  <th class="text-end">Còn lại</th>
+                  <th>TT</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="order-rows">
+                <tr><td colspan="10" class="text-center text-muted py-4">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+  import { requireLogin } from "/js/auth.js";
+  import { initSidebar } from "/js/sidebar.js";
+  import { api } from "/js/api.js";
+
+  requireLogin();
+  initSidebar();
+  const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n)) + " đ";
+  const statusBadge = s => ({
+    pending:   '<span class="badge bg-yellow-lt">Đang làm</span>',
+    ready:     '<span class="badge bg-blue-lt">Đã xong</span>',
+    delivered: '<span class="badge bg-green-lt">Đã giao</span>',
+    cancelled: '<span class="badge bg-red-lt">Đã huỷ</span>',
+  })[s] || `<span class="badge bg-secondary-lt">${s}</span>`;
+
+  // Số ngày còn lại tới hẹn giao (âm = đã trễ), so theo ngày (bỏ giờ) để tránh lệch múi giờ.
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(dateStr + "T00:00:00");
+    if (isNaN(target)) return null;
+    return Math.round((target - today) / 86400000);
+  }
+
+  function dueBadge(dateStr, status) {
+    if (!dateStr) return '<span class="text-muted">—</span>';
+    const d = daysUntil(dateStr);
+    const doneAlready = status === "delivered" || status === "cancelled" || status === "ready";
+    let cls = "text-muted", label = `Còn ${d} ngày`;
+    if (d < 0)      { label = `Trễ ${-d} ngày`; cls = doneAlready ? "text-muted" : "text-danger fw-bold"; }
+    else if (d === 0) { label = "Hôm nay"; cls = doneAlready ? "text-muted" : "text-danger fw-bold"; }
+    else if (d <= 2) { cls = doneAlready ? "text-muted" : "text-warning fw-bold"; }
+    return `${dateStr}<br/><span class="small ${cls}">${label}</span>`;
+  }
+
+  function renderDueAlert(orders) {
+    const box = document.getElementById("due-alert");
+    const dueSoon = orders.filter(o => o.status === "pending" && o.expected_date && daysUntil(o.expected_date) <= 2);
+    if (!dueSoon.length) { box.classList.add("d-none"); box.innerHTML = ""; return; }
+    box.classList.remove("d-none");
+    box.innerHTML = `⚠️ <b>${dueSoon.length} phiếu sắp/đã tới hẹn giao mà chưa xong:</b> ` +
+      dueSoon.map(o => {
+        const d = daysUntil(o.expected_date);
+        const label = d < 0 ? `trễ ${-d} ngày` : (d === 0 ? "hôm nay" : `còn ${d} ngày`);
+        return `<a href="/gold-order.html?id=${o.id}" class="alert-link">${o.order_number} (${o.customer_name || "Khách lẻ"} — ${label})</a>`;
+      }).join(", ");
+  }
+
+  window.markDone = async function(id) {
+    try {
+      await api.put(`/api/gold/orders/${id}`, { status: "ready" });
+      loadOrders();
+    } catch (err) {
+      alert("Lỗi: " + err.message);
+    }
+  };
+
+  // Xác nhận đã giao cho khách (ready → delivered) — bước cuối, đóng phiếu lại.
+  window.confirmDelivered = async function(id) {
+    if (!confirm("Xác nhận đã giao hàng cho khách?")) return;
+    try {
+      await api.put(`/api/gold/orders/${id}`, { status: "delivered" });
+      loadOrders();
+    } catch (err) {
+      alert("Lỗi: " + err.message);
+    }
+  };
+
+  // Xoá phiếu — thực chất là huỷ mềm (status='cancelled'), dùng dọn phiếu bị bấm trùng
+  // hoặc lập nhầm. Backend tự chặn huỷ phiếu đã giao/đã huỷ.
+  window.deleteOrder = async function(id, orderNumber) {
+    if (!confirm(`Xoá phiếu ${orderNumber}? Phiếu sẽ chuyển sang trạng thái "Đã huỷ", không xoá hẳn khỏi hệ thống.`)) return;
+    try {
+      await api.delete(`/api/gold/orders/${id}`);
+      loadOrders();
+    } catch (err) {
+      alert("Lỗi: " + err.message);
+    }
+  };
+
+  window.loadOrders = async function() {
+    const search = document.getElementById("search").value;
+    const status = document.getElementById("filter-status").value;
+    const from   = document.getElementById("filter-from").value;
+    const to     = document.getElementById("filter-to").value;
+    const tbody  = document.getElementById("order-rows");
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">Đang tải...</td></tr>`;
+
+    try {
+      const params = new URLSearchParams({ search, status, from, to });
+      const { orders } = await api.get(`/api/gold/orders?${params}`);
+      renderDueAlert(orders);
+      tbody.innerHTML = orders.length ? orders.map(o => `
+        <tr>
+          <td class="fw-bold text-primary">${o.order_number}</td>
+          <td>${o.order_date}</td>
+          <td>${o.customer_name || '<span class="text-muted">Khách vãng lai</span>'}</td>
+          <td class="text-muted">${o.customer_phone || "—"}</td>
+          <td>${dueBadge(o.expected_date, o.status)}</td>
+          <td class="text-end">${fmtVND(o.total_amount)}</td>
+          <td class="text-end">${fmtVND(o.deposit_amount)}</td>
+          <td class="text-end ${parseInt(o.remaining_amount) > 0 ? 'text-danger fw-bold' : ''}">${fmtVND(o.remaining_amount)}</td>
+          <td>${statusBadge(o.status)}</td>
+          <td class="text-nowrap">
+            ${o.status === "pending" ? `<button class="btn btn-sm btn-outline-success me-1" onclick="markDone('${o.id}')">✅ Đã xong</button>` : ""}
+            ${o.status === "ready" ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="confirmDelivered('${o.id}')">✔️ Xác nhận</button>` : ""}
+            <a href="/gold-order.html?id=${o.id}" class="btn btn-sm btn-ghost-primary">Xem/In</a>
+            ${["pending", "ready"].includes(o.status) ? `<button class="btn btn-sm btn-ghost-danger" onclick="deleteOrder('${o.id}', '${o.order_number}')">🗑️ Xoá</button>` : ""}
+          </td>
+        </tr>`).join("")
+        : `<tr><td colspan="10" class="text-center text-muted py-4">Chưa có phiếu gia công nào</td></tr>`;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-danger">${err.message}</td></tr>`;
+    }
+  };
+
+  document.getElementById("search").addEventListener("keydown", e => { if (e.key === "Enter") loadOrders(); });
+  loadOrders();
+</script>
+</body>
+</html>

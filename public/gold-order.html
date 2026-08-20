@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Phiếu Gia Công</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <style>
+    /* ── TOOLBAR ── */
+    .invoice-toolbar {
+      position: sticky; top: 0; z-index: 200;
+      background: #1e293b; padding: 10px 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .invoice-toolbar .btn { font-size: .85rem; }
+    .invoice-toolbar select.form-select-sm { width: auto; }
+
+    /* ── PHIẾU A4 ── */
+    .invoice-wrap { background: #e5e7eb; padding: 24px 0; min-height: calc(100vh - 60px); }
+    .a4 {
+      font-family: 'Times New Roman', Times, serif;
+      background: #fff; max-width: 210mm;
+      margin: 0 auto; padding: 28px 36px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      font-size: 14px; color: #000;
+    }
+    .a4 h2 { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+    .a4 .sub-title { text-align: center; font-style: italic; margin-bottom: 14px; color: #555; }
+
+    /* Thông tin khách */
+    .cust-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 10px; margin-bottom: 14px; align-items: center; }
+    .cust-grid label { font-weight: 700; white-space: nowrap; }
+
+    /* Input style trong phiếu */
+    .inv-input {
+      font-family: 'Times New Roman', Times, serif; font-size: 14px;
+      border: none; border-bottom: 1px dashed #aaa;
+      padding: 2px 4px; width: 100%; background: transparent;
+    }
+    .inv-input:focus { outline: none; background: #fffde7; }
+    .inv-input.num { text-align: right; }
+    .inv-input[readonly] { color: #1a56db; font-weight: 700; border-bottom: none; }
+
+    /* Table */
+    .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 13px; }
+    .inv-table th, .inv-table td { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }
+    .inv-table th { background: #f3f4f6; text-align: center; font-weight: 700; font-size: 12px; }
+    .inv-table td .inv-input { border: none; padding: 0; }
+    .inv-table tfoot td { background: #f9fafb; font-weight: 700; }
+    .inv-table td.center { text-align: center; }
+    .inv-table td.right { text-align: right; }
+    .del-btn { background: transparent; border: none; color: #dc2626; cursor: pointer; font-size: 14px; font-weight: 700; padding: 0 2px; }
+    .add-row-btn { font-size: 11px; padding: 2px 8px; margin: 4px 0; cursor: pointer; }
+
+    /* Thống kê */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+    .stat-section h4 { font-size: 15px; font-weight: 700; text-decoration: underline; margin-bottom: 6px; }
+    .stat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .stat-table th, .stat-table td { padding: 3px 6px; }
+    .stat-table th { text-align: left; font-weight: 700; white-space: nowrap; }
+    .stat-table td { border-bottom: 1px dotted #ddd; }
+    .debt { color: #dc2626; }
+
+    /* Ghi chú + chữ ký */
+    .notes-row { margin-top: 10px; }
+    .notes-row label { font-weight: 700; }
+    .sign-grid { display: grid; grid-template-columns: 1fr 1fr; text-align: center; font-weight: 700; margin-top: 40px; }
+    .sign-hint { font-weight: 400; font-style: italic; margin-top: 55px; }
+
+    /* Đếm ngược ngày hẹn giao */
+    .due-badge { font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; margin-left: 8px; }
+    .due-ok      { color: #555; }
+    .due-warn    { color: #b45309; }
+    .due-danger  { color: #dc2626; }
+
+    /* Print */
+    @media print {
+      .invoice-toolbar { display: none !important; }
+      .invoice-wrap { background: #fff; padding: 0; }
+      .a4 { box-shadow: none; max-width: 100%; margin: 0; }
+      .no-print { display: none !important; }
+      .due-badge { display: none !important; }
+      .del-btn, .add-row-btn { display: none !important; }
+      .inv-input { border: none !important; }
+      .inv-input[readonly] { color: #000 !important; }
+    }
+  </style>
+  <script src="/js/i18n.js"></script>
+</head>
+<body style="margin:0; background:#e5e7eb;">
+
+<!-- Toolbar -->
+<div class="invoice-toolbar no-print">
+  <a href="/gold-orders.html" class="btn btn-sm btn-ghost-light text-white">← Danh sách</a>
+  <div class="flex-fill"></div>
+  <button class="btn btn-sm btn-outline-success d-none" id="btn-mark-done" onclick="markDone()">✅ Đã xong</button>
+  <select id="trang-thai" class="form-select form-select-sm d-none">
+    <option value="pending">Đang làm</option>
+    <option value="ready">Đã xong</option>
+    <option value="delivered">Đã giao</option>
+    <option value="cancelled">Đã huỷ</option>
+  </select>
+  <button class="btn btn-sm btn-outline-light d-none" id="btn-update-status" onclick="updateStatus()">Cập nhật</button>
+  <div class="flex-fill"></div>
+  <button class="btn btn-sm btn-outline-light d-none" id="btn-print-compact" onclick="printCompact()">🖨️ In gọn</button>
+  <button class="btn btn-sm btn-success" id="btn-save" onclick="saveOrder()">💾 Lưu & In</button>
+  <span id="save-status" class="text-white small ms-2"></span>
+</div>
+
+<!-- Phiếu A4 -->
+<div class="invoice-wrap">
+<div class="a4" id="invoice">
+
+  <h2>PHIẾU GIA CÔNG</h2>
+  <div class="sub-title" id="order-number-display">— Lập mới —</div>
+
+  <!-- Thông tin khách -->
+  <div class="cust-grid">
+    <label>Khách hàng:</label>
+    <input id="khach-hang" class="inv-input" type="text" placeholder="Họ tên..."/>
+    <label>SĐT:</label>
+    <input id="dien-thoai" class="inv-input" type="text"/>
+    <label>Địa chỉ:</label>
+    <input id="dia-chi" class="inv-input" type="text"/>
+    <label>Ngày đặt:</label>
+    <input id="ngay-dat" class="inv-input" type="text" style="width:120px"/>
+    <label>Hẹn giao:</label>
+    <div class="d-flex align-items-center">
+      <input id="ngay-hen" class="inv-input" type="date" style="width:auto" oninput="updateDueBadge()"/>
+      <span id="due-badge" class="due-badge"></span>
+    </div>
+    <label>Giá vàng 99 tham khảo:</label>
+    <input id="gia-vang" type="number" class="inv-input num" value="8350000" step="10000" oninput="calcAll()"/>
+  </div>
+
+  <!-- Bảng món hàng đặt -->
+  <table class="inv-table" id="tbl-items">
+    <thead>
+      <tr>
+        <th style="width:28px">STT</th>
+        <th>Tên món</th>
+        <th>Mô tả / mẫu mã</th>
+        <th style="width:36px">SL</th>
+        <th style="width:54px">Tuổi</th>
+        <th style="width:70px">TL dự kiến<br/><small>(chỉ/món)</small></th>
+        <th style="width:90px">Đơn giá<br/><small>(đ/chỉ)</small></th>
+        <th style="width:80px">Tiền công<br/><small>(đ/món)</small></th>
+        <th style="width:100px">Thành tiền<br/><small>(đ)</small></th>
+        <th class="no-print" style="width:20px"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody-items"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5" style="text-align:right">Tổng trọng lượng:</td>
+        <td class="right" id="tong-tl">0.000</td>
+        <td colspan="2" style="text-align:right">Tổng tiền dự kiến:</td>
+        <td class="right" id="tong-tien" style="color:#1a56db">0</td>
+        <td class="no-print"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <button class="add-row-btn no-print btn btn-sm btn-outline-success" onclick="addItemRow()">+ Thêm món</button>
+
+  <!-- Thống kê -->
+  <div class="stats-grid">
+    <div class="stat-section">
+      <h4>Thanh toán</h4>
+      <table class="stat-table">
+        <tr><th>Tổng tiền dự kiến:</th>
+            <td><input id="sum-tong" class="inv-input num" readonly/></td></tr>
+        <tr><th>Tiền cọc:</th>
+            <td><input id="sum-coc" class="inv-input num" type="number" step="1000" value="0" oninput="calcAll()"/></td></tr>
+        <tr><th class="debt">Còn lại khi giao:</th>
+            <td><input id="sum-con-lai" class="inv-input num debt" readonly/></td></tr>
+      </table>
+    </div>
+    <div class="stat-section notes-row">
+      <label for="ghi-chu">Ghi chú:</label>
+      <textarea id="ghi-chu" class="inv-input" rows="4" style="border:1px solid #ccc; padding:6px;"></textarea>
+    </div>
+  </div>
+
+  <div class="sign-grid">
+    <div>KHÁCH HÀNG<div class="sign-hint">(Ký, ghi rõ họ tên)</div></div>
+    <div>NGƯỜI LẬP PHIẾU<div class="sign-hint">(Ký tên)</div></div>
+  </div>
+
+</div><!-- /a4 -->
+</div><!-- /invoice-wrap -->
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin, getToken } from "/js/auth.js";
+import { printGoldOrderReceipt } from "/js/print.js";
+requireLogin();
+
+// ── HELPERS ─────────────────────────────────────────────
+const fmt   = n => Number(n).toLocaleString("vi-VN");
+const fmtG3 = n => Number(n).toFixed(3);
+const $     = id => document.getElementById(id);
+const valF  = id => parseFloat($(id)?.value) || 0;
+
+// Số ngày còn lại tới hẹn giao (âm = đã trễ), so theo ngày (bỏ giờ).
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(dateStr + "T00:00:00");
+  if (isNaN(target)) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+function updateDueBadge() {
+  const dateStr = $("ngay-hen").value;
+  const badge = $("due-badge");
+  if (!dateStr) { badge.textContent = ""; return; }
+  const d = daysUntil(dateStr);
+  let cls = "due-ok", label = `Còn ${d} ngày`;
+  if (d < 0)      { label = `Trễ ${-d} ngày`; cls = "due-danger"; }
+  else if (d === 0) { label = "Hôm nay"; cls = "due-danger"; }
+  else if (d <= 2) { cls = "due-warn"; }
+  badge.textContent = label;
+  badge.className = "due-badge " + cls;
+}
+window.updateDueBadge = updateDueBadge;
+
+// ── INIT ────────────────────────────────────────────────
+const params  = new URLSearchParams(location.search);
+const orderId = params.get("id");
+let currentOrderId = orderId;
+const today = new Date();
+$("ngay-dat").value =
+  `${today.getDate().toString().padStart(2,"0")}/${(today.getMonth()+1).toString().padStart(2,"0")}/${today.getFullYear()}`;
+
+// ── BẢNG MÓN HÀNG ──────────────────────────────────────
+let itemCount = 0;
+function addItemRow(data = {}) {
+  itemCount++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td class="center">${itemCount}</td>
+    <td><input class="inv-input it-ten" type="text" value="${data.product_name || ""}" placeholder="Tên món..."/></td>
+    <td><input class="inv-input it-mota" type="text" value="${data.description || ""}" placeholder="Mẫu mã, yêu cầu..."/></td>
+    <td><input class="inv-input num it-sl" type="number" value="${data.quantity || 1}" min="1" oninput="calcAll()"/></td>
+    <td><input class="inv-input num it-tuoi" type="number" step="0.5" value="${data.gold_purity || 99}" oninput="calcAll()"/></td>
+    <td><input class="inv-input num it-tl" type="number" step="0.001" value="${data.weight || ""}" placeholder="chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num it-gia" type="number" step="1000" value="${data.unit_price || ""}" placeholder="đ/chỉ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num it-cong" type="number" step="1000" value="${data.making_fee || ""}" placeholder="đ" oninput="calcAll()"/></td>
+    <td><input class="inv-input num it-thanhtien" readonly tabindex="-1"/></td>
+    <td class="no-print"><button class="del-btn" onclick="this.closest('tr').remove(); reindexItems(); calcAll();">×</button></td>
+  `;
+  $("tbody-items").appendChild(tr);
+}
+window.addItemRow = addItemRow;
+
+function reindexItems() {
+  $("tbody-items").querySelectorAll("tr").forEach((tr, i) => { tr.cells[0].textContent = i + 1; });
+  itemCount = $("tbody-items").querySelectorAll("tr").length;
+}
+window.reindexItems = reindexItems;
+
+// ── TÍNH TOÁN ────────────────────────────────────────────
+function calcAll() {
+  const defaultGia = parseFloat($("gia-vang").value) || 0;
+  let tongTien = 0;
+  let tongTL = 0;
+
+  $("tbody-items").querySelectorAll("tr").forEach(tr => {
+    const sl   = parseFloat(tr.querySelector(".it-sl")?.value)   || 1;
+    const tl   = parseFloat(tr.querySelector(".it-tl")?.value)   || 0;
+    const gia  = parseFloat(tr.querySelector(".it-gia")?.value)  || 0;
+    const cong = parseFloat(tr.querySelector(".it-cong")?.value) || 0;
+
+    const thanhTien = sl * (tl * gia + cong);
+    tongTien += thanhTien;
+    tongTL += sl * tl;
+    tr.querySelector(".it-thanhtien").value = fmt(thanhTien);
+  });
+
+  $("tong-tl").textContent = fmtG3(tongTL) + " chỉ";
+  $("tong-tien").textContent = fmt(tongTien);
+  $("sum-tong").value = fmt(tongTien) + " đ";
+
+  const coc     = valF("sum-coc");
+  const conLai  = tongTien - coc;
+  $("sum-con-lai").value = fmt(conLai) + " đ";
+}
+window.calcAll = calcAll;
+
+// ── LƯU VÀO API ─────────────────────────────────────────
+let isSaving = false;
+window.saveOrder = async function() {
+  // Bug đã gặp: check `orderId` (const chụp 1 lần lúc tải trang) thay vì `currentOrderId`
+  // (cập nhật sau khi lưu) khiến bấm nút "In lại" sau khi đã lưu thành công vẫn lọt vào
+  // nhánh tạo mới bên dưới — gõ lại y hệt payload cũ nên ra 2 phiếu trùng nhau hoàn toàn.
+  if (currentOrderId) { window.print(); return; }
+  if (isSaving) return; // chặn bấm dồn dập trong lúc request đầu còn đang xử lý
+  isSaving = true;
+
+  const sdt = $("dien-thoai").value.trim();
+  if (!sdt) {
+    alert("⚠️ Vui lòng nhập số điện thoại khách hàng!");
+    $("dien-thoai").focus();
+    return;
+  }
+
+  const items = [];
+  $("tbody-items").querySelectorAll("tr").forEach(tr => {
+    const ten = tr.querySelector(".it-ten")?.value.trim();
+    const tl  = parseFloat(tr.querySelector(".it-tl")?.value) || 0;
+    if (ten || tl > 0) {
+      items.push({
+        product_name: ten || "Sản phẩm",
+        description:  tr.querySelector(".it-mota")?.value.trim() || null,
+        quantity:     parseInt(tr.querySelector(".it-sl")?.value) || 1,
+        gold_purity:  parseFloat(tr.querySelector(".it-tuoi")?.value) || 99,
+        weight:       tl,
+        unit_price:   parseFloat(tr.querySelector(".it-gia")?.value) || 0,
+        making_fee:   parseFloat(tr.querySelector(".it-cong")?.value) || 0,
+      });
+    }
+  });
+
+  if (!items.length) {
+    alert("Cần ít nhất 1 món hàng đặt!");
+    return;
+  }
+
+  const btn = $("btn-save");
+  btn.disabled = true; btn.textContent = "⏳ Đang lưu...";
+
+  const dateParts = ($("ngay-dat").value || "").split("/");
+  const isoDate = dateParts.length === 3
+    ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
+    : new Date().toISOString().slice(0, 10);
+
+  const payload = {
+    customer_name:    $("khach-hang").value.trim() || null,
+    customer_phone:   sdt,
+    customer_address: $("dia-chi").value.trim() || null,
+    order_date:       isoDate,
+    expected_date:    $("ngay-hen").value || null,
+    gold_price_per_chi: parseInt($("gia-vang").value) || 0,
+    deposit_amount:   valF("sum-coc"),
+    notes:            $("ghi-chu").value.trim() || null,
+    items,
+  };
+
+  try {
+    const res = await fetch("/api/gold/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi lưu phiếu đặt hàng");
+
+    $("order-number-display").textContent = "Số phiếu: " + data.order_number;
+    $("save-status").textContent = "✅ Đã lưu " + data.order_number;
+    btn.textContent = "🖨️ In lại";
+    btn.disabled = false;
+    currentOrderId = data.order_id;
+    history.replaceState({}, "", "/gold-order.html?id=" + data.order_id);
+    setTimeout(() => window.print(), 300);
+  } catch (err) {
+    alert("Lỗi: " + err.message);
+    btn.disabled = false; btn.textContent = "💾 Lưu & In";
+  } finally {
+    isSaving = false;
+  }
+};
+
+// ── CẬP NHẬT TRẠNG THÁI ───────────────────────────────────
+window.updateStatus = async function() {
+  if (!currentOrderId) return;
+  const status = $("trang-thai").value;
+  const btn = $("btn-update-status");
+  btn.disabled = true; btn.textContent = "⏳...";
+
+  try {
+    const res = await fetch("/api/gold/orders/" + currentOrderId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify({ status, deposit_amount: valF("sum-coc"), notes: $("ghi-chu").value.trim() || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi cập nhật trạng thái");
+    $("save-status").textContent = "✅ Đã cập nhật trạng thái";
+    $("btn-mark-done").classList.toggle("d-none", status !== "pending");
+    calcAll();
+  } catch (err) {
+    alert("Lỗi: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Cập nhật";
+  }
+};
+
+// ── ĐÁNH DẤU ĐÃ XONG ──────────────────────────────────────
+window.markDone = async function() {
+  if (!currentOrderId) return;
+  const btn = $("btn-mark-done");
+  btn.disabled = true; btn.textContent = "⏳...";
+
+  try {
+    const res = await fetch("/api/gold/orders/" + currentOrderId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify({ status: "ready" }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi cập nhật trạng thái");
+    $("trang-thai").value = "ready";
+    $("save-status").textContent = "✅ Đã đánh dấu xong";
+    btn.classList.add("d-none");
+  } catch (err) {
+    alert("Lỗi: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "✅ Đã xong";
+  }
+};
+
+// ── IN GỌN (bill compact) ──────────────────────────────────
+window.printCompact = function() {
+  if (!currentOrderId) return;
+  printGoldOrderReceipt(currentOrderId);
+};
+
+// ── LOAD PHIẾU CŨ ──────────────────────────────────────
+async function loadOrder(id) {
+  try {
+    const res = await fetch("/api/gold/orders/" + id, { headers: { Authorization: "Bearer " + getToken() } });
+    if (!res.ok) throw new Error("Không tìm thấy phiếu đặt hàng");
+    const { order, items } = await res.json();
+
+    $("order-number-display").textContent = "Số phiếu: " + order.order_number;
+    $("khach-hang").value  = order.customer_name    || "";
+    $("dien-thoai").value  = order.customer_phone   || "";
+    $("dia-chi").value     = order.customer_address || "";
+    $("ngay-hen").value    = order.expected_date    || "";
+    $("gia-vang").value    = order.gold_price_per_chi || 0;
+    $("sum-coc").value     = order.deposit_amount || 0;
+    $("ghi-chu").value     = order.notes || "";
+
+    const d = new Date(order.order_date);
+    $("ngay-dat").value =
+      `${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}/${d.getFullYear()}`;
+
+    items.forEach(item => addItemRow(item));
+    calcAll();
+    updateDueBadge();
+
+    currentOrderId = id;
+    $("btn-save").textContent = "🖨️ In phiếu";
+    $("trang-thai").value = order.status;
+    $("trang-thai").classList.remove("d-none");
+    $("btn-update-status").classList.remove("d-none");
+    $("btn-print-compact").classList.remove("d-none");
+    if (order.status === "pending") $("btn-mark-done").classList.remove("d-none");
+  } catch (err) {
+    alert("Lỗi tải phiếu đặt hàng: " + err.message);
+  }
+}
+
+// ── CHẠY KHỞI TẠO ───────────────────────────────────────
+// Đặt ở cuối script, sau khi mọi hàm ở trên đã được định nghĩa.
+if (orderId) loadOrder(orderId);
+else { addItemRow(); calcAll(); }
+
+// Load giá vàng mới nhất từ API
+(async () => {
+  try {
+    const { prices } = await fetch("/api/gold/prices", { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json());
+    const p = prices.find(x => x.sell_price) || prices[0];
+    if (p?.sell_price && !orderId) $("gia-vang").value = p.sell_price;
+    calcAll();
+  } catch {}
+})();
+</script>
+</body>
+</html>
