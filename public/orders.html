@@ -349,8 +349,8 @@
   custSearch.addEventListener("input", async function() {
     const term = this.value.trim();
     if (term.length < 2) { custAC.classList.add("d-none"); return; }
-    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}`);
-    custAC.innerHTML = customers.slice(0, 6).map(c =>
+    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}&limit=20`);
+    custAC.innerHTML = customers.map(c =>
       `<div class="ac-item" onclick='selectCustomer("${c.id}", "${c.name}", "${c.phone || ""}")'>${c.name} <span class="text-muted">${c.phone || ""}</span></div>`
     ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
     custAC.classList.remove("d-none");
