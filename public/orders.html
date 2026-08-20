@@ -14,6 +14,7 @@
     .cart-row td { vertical-align: middle; }
     .metal-badge { font-size: 11px; }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -74,6 +75,8 @@
                     <input id="prod-search" type="text" class="form-control" placeholder="Tìm tên, SKU hoặc barcode..."/>
                     <div id="prod-autocomplete" class="autocomplete-list d-none"></div>
                   </div>
+                  <button type="button" class="btn btn-ghost-secondary" id="btn-recognize" title="Nhận diện sản phẩm qua ảnh" onclick="document.getElementById('recognize-file').click()">📷</button>
+                  <input type="file" id="recognize-file" accept="image/jpeg,image/png,image/webp" capture="environment" class="d-none"/>
                   <button type="button" class="btn btn-ghost-secondary d-none" id="btn-custom-item" onclick="openCustomItem()">+ Mục tuỳ ý</button>
                 </div>
               </div>
@@ -206,6 +209,19 @@
   </div>
 </div>
 
+<!-- Modal kết quả nhận diện sản phẩm qua ảnh -->
+<div class="modal modal-blur fade" id="modal-recognize" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">📷 Nhận diện sản phẩm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="recognize-body"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal thêm mục tuỳ ý (hoá đơn nháp) -->
 <div class="modal modal-blur fade" id="modal-custom-item" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -256,6 +272,14 @@
         <div class="mb-3"><label class="form-label">Số điện thoại</label><input id="qc-phone" type="text" class="form-control"/></div>
         <div class="mb-3" id="qc-idcard-section"><label class="form-label">Số CCCD/CMND</label><input id="qc-idcard" type="text" class="form-control"/></div>
         <div class="mb-3"><label class="form-label">Địa chỉ</label><input id="qc-address" type="text" class="form-control"/></div>
+        <div class="row" id="qc-dob-section">
+          <div class="col mb-3"><label class="form-label">Ngày sinh</label><input id="qc-dob" type="text" class="form-control" placeholder="dd/mm/yyyy"/></div>
+          <div class="col mb-3"><label class="form-label">Ngày cấp CCCD</label><input id="qc-id-issue-date" type="text" class="form-control" placeholder="dd/mm/yyyy"/></div>
+        </div>
+        <div class="row">
+          <div class="col mb-3"><label class="form-label">Ngân hàng</label><input id="qc-bank-name" type="text" class="form-control"/></div>
+          <div class="col mb-3"><label class="form-label">Số tài khoản</label><input id="qc-bank-account" type="text" class="form-control"/></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn" data-bs-dismiss="modal">Hủy</button>
@@ -270,7 +294,7 @@
   import { requireLogin } from "/js/auth.js";
   import { initSidebar } from "/js/sidebar.js";
   import { api } from "/js/api.js";
-  import { printReceipt } from "/js/print.js";
+  import { printReceipt, printPurchaseVoucher } from "/js/print.js";
 
   requireLogin();
   initSidebar();
@@ -325,8 +349,8 @@
   custSearch.addEventListener("input", async function() {
     const term = this.value.trim();
     if (term.length < 2) { custAC.classList.add("d-none"); return; }
-    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}`);
-    custAC.innerHTML = customers.slice(0, 6).map(c =>
+    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}&limit=20`);
+    custAC.innerHTML = customers.map(c =>
       `<div class="ac-item" onclick='selectCustomer("${c.id}", "${c.name}", "${c.phone || ""}")'>${c.name} <span class="text-muted">${c.phone || ""}</span></div>`
     ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
     custAC.classList.remove("d-none");
@@ -357,6 +381,7 @@
     const isBiz = document.getElementById("qc-type-business").checked;
     document.getElementById("qc-tax-section").classList.toggle("d-none", !isBiz);
     document.getElementById("qc-idcard-section").classList.toggle("d-none", isBiz);
+    document.getElementById("qc-dob-section").classList.toggle("d-none", isBiz);
     document.getElementById("qc-name-label").textContent = isBiz ? "Tên công ty" : "Họ tên";
   };
 
@@ -386,16 +411,27 @@
     const id_card = document.getElementById("qc-idcard").value.trim();
     const address = document.getElementById("qc-address").value.trim();
     const tax_code = isBiz ? document.getElementById("qc-taxcode").value.trim() : "";
+    const dob            = document.getElementById("qc-dob").value.trim();
+    const id_issue_date  = document.getElementById("qc-id-issue-date").value.trim();
+    const bank_name      = document.getElementById("qc-bank-name").value.trim();
+    const bank_account   = document.getElementById("qc-bank-account").value.trim();
     if (!name) return alert(isBiz ? "Tên công ty là bắt buộc" : "Tên là bắt buộc");
     if (isBiz && !tax_code) return alert("Mã số thuế là bắt buộc với khách doanh nghiệp");
     try {
-      const c = await api.post("/api/customers", { name, phone, id_card, address, is_business: isBiz, tax_code });
+      const c = await api.post("/api/customers", {
+        name, phone, id_card, address, is_business: isBiz, tax_code,
+        dob, id_issue_date, bank_name, bank_account,
+      });
       selectCustomer(c.id, c.name, c.phone);
       bootstrap.Modal.getInstance(document.getElementById("modal-quick-customer")).hide();
       document.getElementById("qc-idcard").value = "";
       document.getElementById("qc-address").value = "";
       document.getElementById("qc-taxcode").value = "";
       document.getElementById("qc-tax-status").innerHTML = "";
+      document.getElementById("qc-dob").value = "";
+      document.getElementById("qc-id-issue-date").value = "";
+      document.getElementById("qc-bank-name").value = "";
+      document.getElementById("qc-bank-account").value = "";
     } catch (err) { alert(err.message); }
   };
 
@@ -419,6 +455,57 @@
 
   document.addEventListener("click", e => {
     if (!prodSearch.contains(e.target)) prodAC.classList.add("d-none");
+  });
+
+  // ── NHẬN DIỆN SẢN PHẨM QUA ẢNH ──────────────────────
+  const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  }[char]));
+
+  const recognizeModalEl = document.getElementById("modal-recognize");
+  const recognizeBody    = document.getElementById("recognize-body");
+  const recognizeModal   = new bootstrap.Modal(recognizeModalEl);
+
+  document.getElementById("recognize-file").addEventListener("change", async function() {
+    const file = this.files[0];
+    this.value = "";
+    if (!file) return;
+    recognizeBody.innerHTML = `<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Đang phân tích ảnh...</div>`;
+    recognizeModal.show();
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      const { candidates, confidence } = await api.upload("/api/products/recognize", form);
+      if (!candidates.length) {
+        recognizeBody.innerHTML = `<div class="text-center text-muted py-4">Không tìm thấy sản phẩm tương tự</div>`;
+        return;
+      }
+      recognizeBody.innerHTML = `
+        ${confidence === "review" ? '<div class="alert alert-warning py-2">Độ tin cậy chưa cao — vui lòng kiểm tra kỹ trước khi chọn</div>' : ""}
+        <div class="list-group">
+          ${candidates.map(c => `
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3 recognize-pick"
+                    data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}" data-sku="${escapeHtml(c.sku)}">
+              ${c.primary_image_url
+                ? `<img src="${escapeHtml(c.primary_image_url)}" style="width:48px;height:48px;object-fit:cover" class="rounded"/>`
+                : `<div class="rounded bg-secondary-lt d-flex align-items-center justify-content-center" style="width:48px;height:48px">📦</div>`}
+              <div class="flex-fill">
+                <div class="fw-medium">${escapeHtml(c.name)}</div>
+                <div class="text-muted small">${escapeHtml(c.sku)} · tương đồng ${Math.round(c.score * 100)}%</div>
+              </div>
+            </button>
+          `).join("")}
+        </div>`;
+    } catch (err) {
+      recognizeBody.innerHTML = `<div class="text-center text-danger py-4">${escapeHtml(err.message)}</div>`;
+    }
+  });
+
+  recognizeBody.addEventListener("click", e => {
+    const btn = e.target.closest(".recognize-pick");
+    if (!btn) return;
+    recognizeModal.hide();
+    addProductToCart(btn.dataset.id, btn.dataset.name, btn.dataset.sku);
   });
 
   window.addProductToCart = async function(productId, name, sku) {
@@ -619,7 +706,7 @@
 
   // ── TẠO ĐƠN ────────────────────────────────────────
   window.submitOrder = async function() {
-    if (!cart.length) return alert("Giỏ hàng đang trống");
+    if (!cart.length && !tradeIns.length) return alert("Giỏ hàng đang trống");
     if (isQuickMode && !selectedCustomerId) return alert("⚠️ Hoá đơn nháp cần chọn khách hàng để lưu công nợ");
     try {
       const items = cart.map(i => ({
@@ -688,6 +775,7 @@
     try {
       await api.post("/api/payments", { order_id: orderId, method, amount, reference_no: ref });
       bootstrap.Modal.getInstance(document.getElementById("modal-payment")).hide();
+      const hadTradeIns = tradeIns.length > 0;
       cart = [];
       tradeIns = [];
       selectedCustomerId = null;
@@ -696,10 +784,14 @@
       onQuickModeToggle(false);
       renderCart();
       renderTradeIns();
-      // Hiện nút in sau khi thanh toán
-    if (confirm((isRefund ? "✅ Đã hoàn tiền cho khách!" : "✅ Thanh toán thành công!") + "\n\nIn gì?\n[OK] = Bill cuộn (80mm)\n[Hủy] = Bỏ qua")) {
-      printReceipt(orderId);
-    }
+      // Đơn có hàng dê thu mua (mua vàng cũ của khách) cần in "Chứng từ mua vào" theo
+      // mẫu 02/TNDN để hợp lệ hoá đơn khai thuế — khác hẳn bill cuộn bán hàng thường.
+      if (hadTradeIns && confirm("✅ " + (isRefund ? "Đã hoàn tiền cho khách!" : "Thanh toán thành công!") + "\n\nIn Chứng từ mua vào (A4, mẫu 02/TNDN)?")) {
+        printPurchaseVoucher(orderId);
+      }
+      if (confirm((isRefund ? "✅ Đã hoàn tiền cho khách!" : "✅ Thanh toán thành công!") + "\n\nIn gì?\n[OK] = Bill cuộn (80mm)\n[Hủy] = Bỏ qua")) {
+        printReceipt(orderId);
+      }
     } catch (err) { alert(err.message); }
   };
 </script>

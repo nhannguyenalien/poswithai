@@ -446,24 +446,6 @@
           </table>
         </div>
 
-        <div id="gold-collect-section" class="d-none mb-3">
-          <div class="fw-bold mb-1">🥇 Thu nợ vàng</div>
-          <div class="text-muted small mb-2">Ghi nhận khi khách mang vàng đến trả bớt/trả hết nợ vàng đang nợ — không cần tạo hoá đơn mới.</div>
-          <div class="row g-2 align-items-end">
-            <div class="col-md-4">
-              <label class="form-label small mb-1">Số chỉ thu được (quy 99)</label>
-              <input id="gold-collect-amount" type="text" inputmode="decimal" step="0.001" min="0" class="form-control form-control-sm" placeholder="VD: 1.5"/>
-            </div>
-            <div class="col-md-5">
-              <label class="form-label small mb-1">Ghi chú</label>
-              <input id="gold-collect-note" type="text" class="form-control form-control-sm" placeholder="VD: Khách mang vàng đến trả nợ"/>
-            </div>
-            <div class="col-md-3">
-              <button type="button" class="btn btn-sm btn-warning w-100" onclick="collectGoldDebt()">🥇 Ghi nhận thu nợ</button>
-            </div>
-          </div>
-        </div>
-
         <div class="fw-bold mb-1">📝 Điều chỉnh nợ nhập tay</div>
         <div class="text-muted small mb-2">Dùng để nhập nợ cũ trước khi dùng phần mềm, hoặc chỉnh sửa/xoá bớt nợ thủ công. Số dương = tăng nợ, số âm = giảm nợ.</div>
         <div class="table-responsive mb-2">
@@ -584,7 +566,7 @@
 import { requireLogin } from "/js/auth.js";
   import { initSidebar } from "/js/sidebar.js";
 import { api } from "/js/api.js";
-import { printInvoiceA4 } from "/js/print.js";
+import { printInvoiceA4, openPendingPrintWindow } from "/js/print.js";
 
 requireLogin();
   initSidebar();
@@ -1182,8 +1164,8 @@ custSearch.addEventListener("input", async function() {
   const term = this.value.trim();
   if (term.length < 2) { custAC.classList.add("d-none"); return; }
   try {
-    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}`);
-    custAC.innerHTML = customers.slice(0, 6).map(c =>
+    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}&limit=20`);
+    custAC.innerHTML = customers.map(c =>
       `<div class="ac-item" onclick='selectCustomer("${c.id}","${c.name}","${c.phone||""}")'>${c.name} <span class="text-muted">${c.phone||""}</span></div>`
     ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
     custAC.classList.remove("d-none");
@@ -1239,9 +1221,6 @@ window.openCustomerDebtModal = function() {
   document.getElementById("debt-modal-gold-label").textContent = lastDebtData.gold_debt_99 >= 0 ? "Tổng nợ vàng (khách nợ, quy 99)" : "Tổng vàng tiệm nợ khách (quy 99)";
   document.getElementById("debt-modal-gold").textContent = `${Math.abs(lastDebtData.gold_debt_99).toFixed(3)} chỉ`;
   document.getElementById("debt-modal-gold").className = "h3 mb-0 " + (Math.abs(lastDebtData.gold_debt_99) > 0.0005 ? "text-danger" : "text-success");
-  // "Thu nợ vàng" chỉ có ý nghĩa khi khách đang thật sự NỢ vàng (>0) — nợ âm nghĩa là
-  // tiệm đang nợ khách vàng, không phải chiều "thu" được ở đây.
-  document.getElementById("gold-collect-section").classList.toggle("d-none", !(lastDebtData.gold_debt_99 > 0.0005));
 
   const typeLabel = t => t === "wholesale" ? "Bán sỉ" : "Bán lẻ";
   const statusLabel = s => ({pending:"Chờ TT", completed:"Hoàn thành"}[s] || s);
@@ -1275,37 +1254,13 @@ window.openCustomerDebtModal = function() {
   bootstrap.Modal.getOrCreateInstance(document.getElementById("modal-customer-debt")).show();
 };
 
-// "Thu nợ vàng" — về bản chất là 1 bút toán điều chỉnh nợ (gold_amount_99 âm) giống hệt
-// cơ chế "Điều chỉnh nợ nhập tay" bên dưới, chỉ khác là có UX hướng dẫn rõ + cảnh báo nếu
-// nhập vượt số đang nợ, để tránh gõ nhầm — vẫn hiện đầy đủ trong lịch sử bút toán, xoá được.
-window.collectGoldDebt = async function() {
-  const custId = document.getElementById("cust-id").value;
-  if (!custId) return alert("Chưa chọn khách hàng");
-  const amount = parseFloat(document.getElementById("gold-collect-amount").value) || 0;
-  if (amount <= 0) return alert("Nhập số chỉ thu được (lớn hơn 0)");
-  const currentGoldDebt = parseFloat(lastDebtData?.gold_debt_99) || 0;
-  if (amount > currentGoldDebt + 0.0005) {
-    if (!confirm(`Khách chỉ đang nợ ${currentGoldDebt.toFixed(3)} chỉ, số bạn nhập (${amount.toFixed(3)} chỉ) lớn hơn số đang nợ.\n\nVẫn ghi nhận?`)) return;
-  }
-  const note = document.getElementById("gold-collect-note").value.trim();
-  try {
-    await api.post(`/api/customers/${custId}/debt`, {
-      money_amount: 0, gold_amount_99: -amount, note: note || "Thu nợ vàng",
-    });
-    document.getElementById("gold-collect-amount").value = "";
-    document.getElementById("gold-collect-note").value = "";
-    await loadCustomerDebt(custId, lastDebtData.custName);
-    openCustomerDebtModal();
-  } catch (err) { alert(err.message); }
-};
-
 window.addDebtAdjustment = async function() {
   const custId = document.getElementById("cust-id").value;
   if (!custId) return alert("Chưa chọn khách hàng");
   const moneyAmount = parseInt(document.getElementById("adj-money").value) || 0;
   const goldAmount  = parseFloat(document.getElementById("adj-gold").value) || 0;
   const note        = document.getElementById("adj-note").value.trim();
-  if (!moneyAmount && !goldAmount) return alert("Cần nhập ít nhất 1 trong 2: nợ tiền hoặc nợ vàng");
+  if (!moneyAmount && !goldAmount && !note) return alert("Cần nhập ít nhất 1 trong 3: nợ tiền, nợ vàng, hoặc ghi chú");
   try {
     await api.post(`/api/customers/${custId}/debt`, {
       money_amount: moneyAmount, gold_amount_99: goldAmount, note: note || null,
@@ -1617,7 +1572,12 @@ window.submitOrderConfirmed = async function() {
   const payload = pendingOrderPayload;
   const meta = pendingOrderMeta;
   if (!payload || !meta) return;
-  await doSubmitOrder(payload, { ...meta, print: true });
+  // Mở cửa sổ in NGAY lúc click (trước khi await API tạo đơn) — mở sau khi đã await dễ bị
+  // trình duyệt âm thầm chặn popup (không có lỗi/cảnh báo gì), khiến bấm "Lưu & In" xong
+  // không thấy bảng in hiện lên (xem openPendingPrintWindow trong /js/print.js). Không mở
+  // khi đang SỬA hoá đơn nháp — luồng đó không in, chỉ redirect sang Danh sách đơn.
+  const printWin = meta.isEditing ? null : openPendingPrintWindow(900, 700);
+  await doSubmitOrder(payload, { ...meta, print: true, printWin });
 };
 
 // "Lưu tạm — hoàn thành sau": lưu ngay thành hoá đơn nháp (is_quick=true — ẩn khỏi DS
@@ -1638,7 +1598,7 @@ window.saveWholesaleDraft = async function() {
 };
 
 async function doSubmitOrder(payload, meta) {
-  const { isEditing, rawPayAmt, print, draft } = meta;
+  const { isEditing, rawPayAmt, print, draft, printWin } = meta;
 
   const btn = document.getElementById("submit-order-btn");
   const draftBtn = document.getElementById("save-draft-btn");
@@ -1672,7 +1632,7 @@ async function doSubmitOrder(payload, meta) {
     }
 
     // In A4 ngay sau khi tạo — bỏ qua nếu chỉ "Lưu tạm" (đơn còn dở, chưa cần in).
-    if (print) printInvoiceA4(orderId, "wholesale");
+    if (print) printInvoiceA4(orderId, "wholesale", printWin);
 
     const debtMsg = Math.abs(orderRes.gold_debt_99 || 0) > 0.0005
       ? ` Nợ vàng còn lại: ${orderRes.gold_debt_99.toFixed(3)} chỉ.` : "";
@@ -1700,6 +1660,7 @@ async function doSubmitOrder(payload, meta) {
       ? `✅ Đã lưu tạm hoá đơn nháp ${orderRes.order_number}. Vào "Danh sách đơn" → "Sửa hoá đơn nháp" để hoàn thành sau.`
       : `✅ Đã tạo đơn ${orderRes.order_number}.${debtMsg} Cửa sổ in đang mở...`);
   } catch (err) {
+    printWin?.close();
     alert("Lỗi: " + err.message);
   } finally {
     btn.disabled = false; btn.textContent = isEditing ? "💾 Cập nhật hoá đơn nháp" : "📄 Tạo đơn & In A4";
