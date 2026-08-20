@@ -44,6 +44,11 @@
     .sign-row td { text-align: center; font-size: 9pt; padding-top: 30px; }
     .no-print { display: none; }
 
+    #receipt { position: relative; }
+    .receipt-heading.has-support-qr { min-height: 66px; padding-right: 62px; }
+    .support-qr-corner { position: absolute; top: 0; right: 0; width: 58px; text-align: center; font-size: 6.5pt; line-height: 1.05; }
+    .support-qr-corner img { display: block; width: 56px; height: 56px; margin: 0 auto 2px; }
+
     @media screen {
       body { margin: 20px auto; border: 1px dashed #ccc; padding: 10px; }
       .no-print {
@@ -61,6 +66,7 @@
     }
   </style>
   <script src="/js/i18n.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -99,10 +105,19 @@ async function load() {
 
   const statusLabel = { pending: "Đang làm", ready: "Đã xong", delivered: "Đã giao", cancelled: "Đã huỷ" }[order.status] || order.status;
 
+  const hasSupportQr = (settings.show_support_qr === "true" || settings.show_support_qr === "1") && order.support_chat_url;
+
   document.getElementById("receipt").innerHTML = `
-    <div class="center bold large">${shopName}</div>
-    ${shopAddr  ? `<div class="center small">${shopAddr}</div>`  : ""}
-    ${shopPhone ? `<div class="center small">ĐT: ${shopPhone}</div>` : ""}
+    ${hasSupportQr ? `
+      <div class="support-qr-corner">
+        <div id="support-qr"></div>
+        <div>Quét hỏi tình trạng</div>
+      </div>` : ""}
+    <div class="receipt-heading${hasSupportQr ? " has-support-qr" : ""}">
+      <div class="center bold large">${shopName}</div>
+      ${shopAddr  ? `<div class="center small">${shopAddr}</div>`  : ""}
+      ${shopPhone ? `<div class="center small">ĐT: ${shopPhone}</div>` : ""}
+    </div>
     <div class="divider-solid"></div>
 
     <div class="center bold" style="font-size:13pt;">PHIẾU GIA CÔNG</div>
@@ -168,6 +183,10 @@ async function load() {
     </div>
     <div style="height:10mm"></div>
   `;
+
+  if (document.getElementById("support-qr")) {
+    new QRCode(document.getElementById("support-qr"), { text: order.support_chat_url, width: 56, height: 56 });
+  }
 
   document.getElementById("screen-note").textContent = `Phiếu: ${order.order_number}`;
   setTimeout(() => window.print(), 500);

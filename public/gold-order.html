@@ -23,9 +23,12 @@
       margin: 0 auto; padding: 28px 36px;
       box-shadow: 0 4px 20px rgba(0,0,0,.25);
       font-size: 14px; color: #000;
+      position: relative;
     }
     .a4 h2 { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 6px; }
     .a4 .sub-title { text-align: center; font-style: italic; margin-bottom: 14px; color: #555; }
+    .support-qr-corner { position: absolute; top: 20px; right: 24px; width: 24mm; text-align: center; font-size: 8pt; line-height: 1.1; font-weight: 600; font-family: Arial, sans-serif; }
+    .support-qr-corner img, .support-qr-corner canvas { display: block; width: 22mm !important; height: 22mm !important; margin: 0 auto 2px; }
 
     /* Thông tin khách */
     .cust-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 10px; margin-bottom: 14px; align-items: center; }
@@ -86,6 +89,7 @@
     }
   </style>
   <script src="/js/i18n.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body style="margin:0; background:#e5e7eb;">
 
@@ -152,9 +156,7 @@
     <tbody id="tbody-items"></tbody>
     <tfoot>
       <tr>
-        <td colspan="5" style="text-align:right">Tổng trọng lượng:</td>
-        <td class="right" id="tong-tl">0.000</td>
-        <td colspan="2" style="text-align:right">Tổng tiền dự kiến:</td>
+        <td colspan="8" style="text-align:right">Tổng tiền dự kiến:</td>
         <td class="right" id="tong-tien" style="color:#1a56db">0</td>
         <td class="no-print"></td>
       </tr>
@@ -263,7 +265,6 @@ window.reindexItems = reindexItems;
 function calcAll() {
   const defaultGia = parseFloat($("gia-vang").value) || 0;
   let tongTien = 0;
-  let tongTL = 0;
 
   $("tbody-items").querySelectorAll("tr").forEach(tr => {
     const sl   = parseFloat(tr.querySelector(".it-sl")?.value)   || 1;
@@ -273,11 +274,9 @@ function calcAll() {
 
     const thanhTien = sl * (tl * gia + cong);
     tongTien += thanhTien;
-    tongTL += sl * tl;
     tr.querySelector(".it-thanhtien").value = fmt(thanhTien);
   });
 
-  $("tong-tl").textContent = fmtG3(tongTL) + " chỉ";
   $("tong-tien").textContent = fmt(tongTien);
   $("sum-tong").value = fmt(tongTien) + " đ";
 
@@ -456,6 +455,21 @@ async function loadOrder(id) {
     $("btn-update-status").classList.remove("d-none");
     $("btn-print-compact").classList.remove("d-none");
     if (order.status === "pending") $("btn-mark-done").classList.remove("d-none");
+
+    // QR để khách quét hỏi tình trạng phiếu qua bot chat — chỉ hiện khi tiệm bật cờ cài
+    // đặt show_support_qr (đã dùng chung cho hoá đơn bán lẻ/sỉ) và phiếu đã có link chat.
+    if (order.support_chat_url) {
+      try {
+        const { settings } = await fetch("/api/settings", { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json());
+        if (settings?.show_support_qr === "true" || settings?.show_support_qr === "1") {
+          const support = document.createElement("div");
+          support.className = "support-qr-corner";
+          support.innerHTML = '<div id="support-qr"></div><div>Quét hỏi tình trạng</div>';
+          $("invoice").prepend(support);
+          new QRCode(document.getElementById("support-qr"), { text: order.support_chat_url, width: 84, height: 84 });
+        }
+      } catch {}
+    }
   } catch (err) {
     alert("Lỗi tải phiếu đặt hàng: " + err.message);
   }

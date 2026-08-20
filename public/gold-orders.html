@@ -30,6 +30,22 @@
         <!-- Cảnh báo phiếu sắp/đã tới hẹn giao mà chưa xong -->
         <div id="due-alert" class="alert alert-warning d-none"></div>
 
+        <!-- Tổng hợp toàn bộ phiếu đang lọc (không phải của riêng 1 phiếu) -->
+        <div class="row row-cards mb-3">
+          <div class="col-6 col-md-3">
+            <div class="card card-sm"><div class="card-body">
+              <div class="text-muted small">Tổng tiền dự kiến</div>
+              <div class="h3 mb-0" id="summary-total-amount">0 đ</div>
+            </div></div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card card-sm"><div class="card-body">
+              <div class="text-muted small">Tổng trọng lượng</div>
+              <div class="h3 mb-0" id="summary-total-weight">0.000 chỉ</div>
+            </div></div>
+          </div>
+        </div>
+
         <!-- Bộ lọc -->
         <div class="card mb-3">
           <div class="card-body py-2">
@@ -180,7 +196,9 @@
 
     try {
       const params = new URLSearchParams({ search, status, from, to });
-      const { orders } = await api.get(`/api/gold/orders?${params}`);
+      const { orders, summary } = await api.get(`/api/gold/orders?${params}`);
+      document.getElementById("summary-total-amount").textContent = fmtVND(summary?.total_amount || 0);
+      document.getElementById("summary-total-weight").textContent = (summary?.total_weight || 0).toFixed(3) + " chỉ";
       renderDueAlert(orders);
       tbody.innerHTML = orders.length ? orders.map(o => `
         <tr>
