@@ -105,7 +105,9 @@ async function load() {
 
   const statusLabel = { pending: "Đang làm", ready: "Đã xong", delivered: "Đã giao", cancelled: "Đã huỷ" }[order.status] || order.status;
 
-  const hasSupportQr = (settings.show_support_qr === "true" || settings.show_support_qr === "1") && order.support_chat_url;
+  const isOn = v => v === "true" || v === "1";
+  const hasSupportQr = (settings.show_support_qr_gold_order !== undefined
+    ? isOn(settings.show_support_qr_gold_order) : isOn(settings.show_support_qr)) && order.support_chat_url;
 
   document.getElementById("receipt").innerHTML = `
     ${hasSupportQr ? `

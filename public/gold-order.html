@@ -465,12 +465,15 @@ async function loadOrder(id) {
     $("btn-print-compact").classList.remove("d-none");
     if (order.status === "pending") $("btn-mark-done").classList.remove("d-none");
 
-    // QR để khách quét hỏi tình trạng phiếu qua bot chat — chỉ hiện khi tiệm bật cờ cài
-    // đặt show_support_qr (đã dùng chung cho hoá đơn bán lẻ/sỉ) và phiếu đã có link chat.
+    // QR để khách quét hỏi tình trạng phiếu qua bot chat — chỉ hiện khi tiệm bật cờ
+    // show_support_qr_gold_order (tách riêng theo loại hoá đơn) và phiếu đã có link chat.
     if (order.support_chat_url) {
       try {
         const { settings } = await fetch("/api/settings", { headers: { Authorization: "Bearer " + getToken() } }).then(r => r.json());
-        if (settings?.show_support_qr === "true" || settings?.show_support_qr === "1") {
+        const isOn = v => v === "true" || v === "1";
+        const showQr = settings?.show_support_qr_gold_order !== undefined
+          ? isOn(settings.show_support_qr_gold_order) : isOn(settings?.show_support_qr);
+        if (showQr) {
           const support = document.createElement("div");
           support.className = "support-qr-corner";
           support.innerHTML = '<div id="support-qr"></div><div>Quét hỏi tình trạng</div>';
