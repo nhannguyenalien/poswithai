@@ -106,8 +106,9 @@
   </select>
   <button class="btn btn-sm btn-outline-light d-none" id="btn-update-status" onclick="updateStatus()">Cập nhật</button>
   <div class="flex-fill"></div>
-  <button class="btn btn-sm btn-outline-light d-none" id="btn-print-compact" onclick="printCompact()">🖨️ In gọn</button>
-  <button class="btn btn-sm btn-success" id="btn-save" onclick="saveOrder()">💾 Lưu & In</button>
+  <button class="btn btn-sm btn-outline-light d-none" id="btn-print-a4" onclick="window.print()">🖨️ In A4</button>
+  <button class="btn btn-sm btn-outline-light d-none" id="btn-print-compact" onclick="printCompact()">🖨️ In gọn (POS)</button>
+  <button class="btn btn-sm btn-success" id="btn-save" onclick="saveOrder()">💾 Lưu & In (POS)</button>
   <span id="save-status" class="text-white small ms-2"></span>
 </div>
 
@@ -292,9 +293,8 @@ window.saveOrder = async function() {
   // Bug đã gặp: check `orderId` (const chụp 1 lần lúc tải trang) thay vì `currentOrderId`
   // (cập nhật sau khi lưu) khiến bấm nút "In lại" sau khi đã lưu thành công vẫn lọt vào
   // nhánh tạo mới bên dưới — gõ lại y hệt payload cũ nên ra 2 phiếu trùng nhau hoàn toàn.
-  if (currentOrderId) { window.print(); return; }
+  if (currentOrderId) { printGoldOrderReceipt(currentOrderId); return; }
   if (isSaving) return; // chặn bấm dồn dập trong lúc request đầu còn đang xử lý
-  isSaving = true;
 
   const sdt = $("dien-thoai").value.trim();
   if (!sdt) {
@@ -325,6 +325,10 @@ window.saveOrder = async function() {
     return;
   }
 
+  // Chỉ khoá nút từ đây trở đi — mọi early-return validate ở trên xong là thoát hẳn
+  // hàm luôn, không đi qua finally nên phải đặt cờ SAU khi validate xong để không bị
+  // kẹt isSaving=true mãi mãi nếu người dùng bỏ trống SĐT/chưa thêm món hàng.
+  isSaving = true;
   const btn = $("btn-save");
   btn.disabled = true; btn.textContent = "⏳ Đang lưu...";
 
@@ -356,14 +360,18 @@ window.saveOrder = async function() {
 
     $("order-number-display").textContent = "Số phiếu: " + data.order_number;
     $("save-status").textContent = "✅ Đã lưu " + data.order_number;
-    btn.textContent = "🖨️ In lại";
+    btn.textContent = "🖨️ In lại (POS)";
     btn.disabled = false;
     currentOrderId = data.order_id;
     history.replaceState({}, "", "/gold-order.html?id=" + data.order_id);
-    setTimeout(() => window.print(), 300);
+    $("btn-print-a4").classList.remove("d-none");
+    $("btn-print-compact").classList.remove("d-none");
+    // Mặc định in bill khổ nhiệt trên máy POS, không phải khổ A4 — khổ A4 có nút riêng
+    // ("🖨️ In A4") cho ai cần bản đầy đủ để lưu hồ sơ/khách yêu cầu.
+    setTimeout(() => printGoldOrderReceipt(data.order_id), 300);
   } catch (err) {
     alert("Lỗi: " + err.message);
-    btn.disabled = false; btn.textContent = "💾 Lưu & In";
+    btn.disabled = false; btn.textContent = "💾 Lưu & In (POS)";
   } finally {
     isSaving = false;
   }
@@ -449,10 +457,11 @@ async function loadOrder(id) {
     updateDueBadge();
 
     currentOrderId = id;
-    $("btn-save").textContent = "🖨️ In phiếu";
+    $("btn-save").textContent = "🖨️ In lại (POS)";
     $("trang-thai").value = order.status;
     $("trang-thai").classList.remove("d-none");
     $("btn-update-status").classList.remove("d-none");
+    $("btn-print-a4").classList.remove("d-none");
     $("btn-print-compact").classList.remove("d-none");
     if (order.status === "pending") $("btn-mark-done").classList.remove("d-none");
 
