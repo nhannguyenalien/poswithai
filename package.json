@@ -2,12 +2,19 @@
   "name": "pos-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler pages dev public --compatibility-date=2026-06-01",
-    "deploy": "wrangler pages deploy public"
+    "deploy": "wrangler pages deploy public",
+    "test": "node --test test/*.test.js",
+    "test:integration": "node --test test/*.integration.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "check": "find functions -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "jose": "^6.1.0"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

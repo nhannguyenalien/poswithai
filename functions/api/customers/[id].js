@@ -1,5 +1,7 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
+import { validateUuid, validationError } from "../../_validation.js";
+import { syncCustomerSupportContext } from "../../_support-chat.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -9,6 +11,11 @@ export async function onRequest(context) {
   if (auth instanceof Response) return auth;
 
   const { id } = context.params;
+  const idError = validateUuid(id, "id");
+  if (idError) return validationError([idError]);
+  const permission = context.request.method === "GET" ? "customers.read" : "customers.write";
+  const allowed = await requirePermission(context, auth, permission);
+  if (allowed instanceof Response) return allowed;
   if (context.request.method === "GET") return getCustomer(context, auth, id);
   if (context.request.method === "PUT") return updateCustomer(context, auth, id);
   return errorJson("Method not allowed", 405);
@@ -35,7 +42,10 @@ async function updateCustomer({ request, env }, { tenantId }, id) {
   let body;
   try { body = await request.json(); } catch { return errorJson("Body không hợp lệ", 400); }
 
-  const { name, phone, email, id_card, address, is_business, tax_code } = body;
+  const {
+    name, phone, email, id_card, address, is_business, tax_code,
+    dob, id_issue_date, bank_name, bank_account,
+  } = body;
   const sql = getDb(env);
   const now = new Date().toISOString();
 
@@ -44,18 +54,25 @@ async function updateCustomer({ request, env }, { tenantId }, id) {
   // thực sự không gửi field này (undefined), còn true/false đều được ghi đè bình thường.
   const rows = await sql`
     UPDATE customers
-    SET name        = COALESCE(${name    || null}, name),
-        phone       = COALESCE(${phone   || null}, phone),
-        email       = COALESCE(${email   || null}, email),
-        id_card     = COALESCE(${id_card || null}, id_card),
-        address     = COALESCE(${address || null}, address),
-        is_business = COALESCE(${is_business ?? null}, is_business),
-        tax_code    = COALESCE(${tax_code || null}, tax_code),
-        updated_at  = ${now}
+    SET name           = COALESCE(${name    || null}, name),
+        phone          = COALESCE(${phone   || null}, phone),
+        email          = COALESCE(${email   || null}, email),
+        id_card        = COALESCE(${id_card || null}, id_card),
+        address        = COALESCE(${address || null}, address),
+        is_business    = COALESCE(${is_business ?? null}, is_business),
+        tax_code       = COALESCE(${tax_code || null}, tax_code),
+        dob            = COALESCE(${dob || null}, dob),
+        id_issue_date  = COALESCE(${id_issue_date || null}, id_issue_date),
+        bank_name      = COALESCE(${bank_name || null}, bank_name),
+        bank_account   = COALESCE(${bank_account || null}, bank_account),
+        updated_at     = ${now}
     WHERE id = ${id} AND tenant_id = ${tenantId}
-    RETURNING id, name, phone, email, id_card, address, is_business, tax_code
+    RETURNING id, name, phone, email, id_card, address, is_business, tax_code,
+              dob, id_issue_date, bank_name, bank_account
   `;
 
   if (!rows.length) return errorJson("Không tìm thấy khách hàng", 404);
+  try { await syncCustomerSupportContext(sql, env, tenantId, id); }
+  catch (err) { console.error("Không đồng bộ được dữ liệu khách sau khi cập nhật:", err.message); }
   return json(rows[0]);
 }

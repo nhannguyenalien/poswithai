@@ -1,4 +1,5 @@
 // functions/_auth.js — JWT HS256 via Web Crypto API
+import { errorJson, getDb } from "./_db.js";
 
 // ── BASE64URL ────────────────────────────────────────────────────────────────
 
@@ -109,9 +110,7 @@ export async function verifyToken(token, secret) {
 export async function requireAuth({ request, env }) {
   const header = request.headers.get("Authorization") || "";
   if (!header.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Chưa đăng nhập" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return errorJson("Chưa đăng nhập", 401, "AUTH_REQUIRED");
   }
   const token = header.slice(7);
 
@@ -119,22 +118,44 @@ export async function requireAuth({ request, env }) {
 
   const payload = await verifyToken(token, env.JWT_SECRET);
   if (!payload) {
-    return new Response(JSON.stringify({ error: "Token không hợp lệ hoặc hết hạn" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return errorJson("Token không hợp lệ hoặc hết hạn", 401, "TOKEN_INVALID");
   }
   if (payload.setupPending) {
-    return new Response(JSON.stringify({ error: "Cần hoàn thành setup", setupPending: true }), {
-      status: 403, headers: { "Content-Type": "application/json" },
-    });
+    return errorJson("Cần hoàn thành setup", 403, "SETUP_REQUIRED", { setupPending: true });
   }
   if (!payload.tenantId) {
-    return new Response(JSON.stringify({ error: "Token thiếu tenantId" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return errorJson("Token thiếu tenantId", 401, "TOKEN_INVALID");
   }
 
-  return { userId: payload.userId, tenantId: payload.tenantId, email: payload.email, isApiToken: false };
+  return {
+    userId: payload.userId,
+    tenantId: payload.tenantId,
+    email: payload.email,
+    isApiToken: false,
+    authMethod: payload.authMethod || null,
+    authTime: Number(payload.authTime || payload.iat || 0),
+  };
+}
+
+/** Enforce a named permission from the user's current role (wildcard grants all). */
+export async function requirePermission(context, auth, permission) {
+  if (auth instanceof Response) return auth;
+  const sql = getDb(context.env);
+  const rows = await sql`
+    SELECT r.permissions
+    FROM users u LEFT JOIN roles r ON r.id = u.role_id AND r.tenant_id = u.tenant_id
+    WHERE u.id = ${auth.userId} AND u.tenant_id = ${auth.tenantId} AND u.status = 'active'
+    LIMIT 1
+  `;
+  if (!rows.length) return errorJson("Tài khoản không còn hoạt động", 403, "ACCOUNT_DISABLED");
+  let permissions = rows[0].permissions || [];
+  if (typeof permissions === "string") {
+    try { permissions = JSON.parse(permissions); } catch { permissions = []; }
+  }
+  if (!Array.isArray(permissions) || (!permissions.includes("*") && !permissions.includes(permission))) {
+    return errorJson("Bạn không có quyền thực hiện thao tác này", 403, "PERMISSION_DENIED", { permission });
+  }
+  return auth;
 }
 
 // ── API TOKEN (tích hợp bên ngoài) ────────────────────────────────────────────
@@ -163,7 +184,6 @@ export async function generateApiToken() {
 }
 
 async function verifyApiToken(token, env) {
-  const { getDb } = await import("./_db.js");
   const sql = getDb(env);
   const hash = await sha256Hex(token);
 
@@ -172,9 +192,7 @@ async function verifyApiToken(token, env) {
     FROM api_tokens WHERE token_hash = ${hash} LIMIT 1
   `;
   if (!rows.length || rows[0].revoked_at) {
-    return new Response(JSON.stringify({ error: "API token không hợp lệ hoặc đã bị thu hồi" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return errorJson("API token không hợp lệ hoặc đã bị thu hồi", 401, "API_TOKEN_INVALID");
   }
   const tokenRow = rows[0];
 
@@ -212,11 +230,14 @@ async function checkRateLimit(sql, tokenId, limitPerMinute) {
   }
 
   if (count > limitPerMinute) {
-    return new Response(JSON.stringify({
-      error: `Vượt giới hạn ${limitPerMinute} request/phút cho token này. Thử lại sau.`,
-    }), {
+    const response = errorJson(
+      `Vượt giới hạn ${limitPerMinute} request/phút cho token này. Thử lại sau.`,
+      429, "RATE_LIMITED", { limit_per_minute: limitPerMinute }
+    );
+    return new Response(response.body, {
       status: 429,
       headers: {
+        ...Object.fromEntries(response.headers),
         "Content-Type": "application/json",
         "Retry-After": "60",
         "X-RateLimit-Limit": String(limitPerMinute),

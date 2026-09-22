@@ -59,11 +59,13 @@ export async function onRequest({ request, env }) {
 
   const sql = getDb(env);
 
-  // 3. Tìm user trong DB theo google_id
+  // 3. Tìm user theo Google ID; nếu tài khoản cũ chưa liên kết Google thì fallback theo email.
   const users = await sql`
-    SELECT u.id, u.tenant_id, u.email, u.name, u.status
+    SELECT u.id, u.tenant_id, u.email, u.name, u.google_id, u.status
     FROM users u
     WHERE u.google_id = ${gUser.id}
+       OR LOWER(TRIM(u.email)) = LOWER(TRIM(${gUser.email}))
+    ORDER BY CASE WHEN u.google_id = ${gUser.id} THEN 0 ELSE 1 END
     LIMIT 1
   `;
 
@@ -74,14 +76,30 @@ export async function onRequest({ request, env }) {
       return redirect("/login.html?error=account_suspended", true);
     }
 
-    // Cập nhật avatar nếu thay đổi
+    // Không được tự động chiếm một email đã liên kết với Google ID khác.
+    if (user.google_id && user.google_id !== gUser.id) {
+      return redirect("/login.html?error=account_google_mismatch", true);
+    }
+
+    // Liên kết tài khoản cũ với Google ở lần đăng nhập đầu tiên và cập nhật avatar.
     await sql`
-      UPDATE users SET avatar_url = ${gUser.picture || null}, updated_at = ${new Date().toISOString()}
+      UPDATE users
+      SET google_id = COALESCE(google_id, ${gUser.id}),
+          avatar_url = ${gUser.picture || null},
+          updated_at = ${new Date().toISOString()}
       WHERE id = ${user.id}
     `;
 
+    const authTime = Math.floor(Date.now() / 1000);
     const token = await createToken(
-      { userId: user.id, tenantId: user.tenant_id, email: user.email },
+      {
+        userId: user.id,
+        tenantId: user.tenant_id,
+        email: user.email,
+        name: user.name,
+        authMethod: "google",
+        authTime,
+      },
       env.JWT_SECRET
     );
 

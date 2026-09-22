@@ -14,6 +14,7 @@ export async function onRequest(context) {
   const sql   = getDb(context.env);
   const users = await sql`
     SELECT u.id, u.name, u.email, u.avatar_url, u.status,
+           (u.password_hash IS NOT NULL) AS has_password,
            r.name        AS role_name,
            r.permissions AS role_permissions,
            t.id          AS tenant_id,
@@ -26,5 +27,9 @@ export async function onRequest(context) {
     LIMIT 1
   `;
   if (!users.length) return errorJson("Không tìm thấy user", 404);
-  return json(users[0]);
+  return json({
+    ...users[0],
+    auth_method: auth.authMethod,
+    password_change_without_current: auth.authMethod === "google",
+  });
 }

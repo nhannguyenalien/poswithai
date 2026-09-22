@@ -11,6 +11,7 @@
     .debt-cell { font-weight: 600; }
     .summary-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -155,6 +156,7 @@
         <div class="mb-3">
           <label class="form-label">Số tiền</label>
           <input id="pay-amount" type="number" class="form-control" step="1000" min="0"/>
+          <div class="form-hint">Có thể nhập cao hơn tiền toa để thu/trả kèm nợ cũ; phần dư sẽ được tính vào công nợ khách.</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -170,7 +172,7 @@
 import { requireLogin } from "/js/auth.js";
 import { initSidebar } from "/js/sidebar.js";
 import { api } from "/js/api.js";
-import { printInvoiceA4 } from "/js/print.js";
+import { printInvoiceA4, printPurchaseVoucher } from "/js/print.js";
 
 requireLogin();
 initSidebar();
@@ -285,6 +287,10 @@ function renderDetail(data) {
   // không cần xét isRefund riêng ở bước này (dương = khách còn nợ, âm = tiệm còn nợ khách).
   const thisOrderNet = total - paidTotal;
   const moneyDebt  = Math.abs(thisOrderNet);
+  // Chiều của lần thu/hoàn TIẾP THEO phải dựa trên số dư thật, không dựa trên dấu tổng
+  // toa. Ví dụ toa +100 nhưng khách đã trả 150 thì thisOrderNet = -50: tiệm phải hoàn
+  // 50 cho khách, nếu vẫn dùng total < 0 sẽ hiện "Thu thêm" và làm số dư sai hơn nữa.
+  const shouldRefundPayment = thisOrderNet < 0;
   const methodLabel = m => ({cash:"Tiền mặt",card:"Thẻ ngân hàng",transfer:"Chuyển khoản",installment:"Trả góp"}[m]||m);
 
   // Nợ cũ chốt lúc lập đơn (snapshot, xem migrate_order_old_debt.sql) — cộng vào số nợ
@@ -400,7 +406,7 @@ function renderDetail(data) {
           ${payments.map(p => `<div class="d-flex justify-content-between small"><span class="text-muted">${methodLabel(p.method)} (${fmtDate(p.created_at)}):</span><span>${fmtVND(Math.abs(p.amount))}</span></div>`).join("")}
           ${combinedMoneyDebt > 0 ? `
             <div class="d-flex justify-content-between mt-1"><span class="text-danger fw-bold">${combinedIsShopOwes ? "Tiệm còn nợ khách:" : (hasGoldModel ? "Nợ tiền:" : "Còn nợ:")}</span><span class="text-danger fw-bold">${fmtVND(combinedMoneyDebt)}</span></div>
-            ${oldMoneyDebt !== 0 ? `<div class="text-muted small text-end">(gồm nợ cũ ${oldMoneyDebt < 0 ? "tiệm nợ khách " : ""}${fmtVND(Math.abs(oldMoneyDebt))} + đơn này ${isRefund ? "tiệm nợ khách " : ""}${fmtVND(moneyDebt)})</div>` : ""}
+            ${oldMoneyDebt !== 0 ? `<div class="text-muted small text-end">(gồm nợ cũ ${oldMoneyDebt < 0 ? "tiệm nợ khách " : ""}${fmtVND(Math.abs(oldMoneyDebt))} + đơn này ${shouldRefundPayment ? "tiệm nợ khách " : ""}${fmtVND(moneyDebt)})</div>` : ""}
           ` : ""}
         </div>
       </div>
@@ -409,9 +415,14 @@ function renderDetail(data) {
 
   const footerBtns = [];
   if (moneyDebt > 0) {
-    footerBtns.push(`<button class="btn btn-primary" onclick='openPayModal("${order.id}", ${moneyDebt}, ${isRefund})'>${isRefund ? "💸 Hoàn thêm tiền" : "💰 Thu thêm tiền"}</button>`);
+    footerBtns.push(`<button class="btn btn-primary" onclick='openPayModal("${order.id}", ${moneyDebt}, ${shouldRefundPayment})'>${shouldRefundPayment ? "💸 Hoàn thêm tiền" : "💰 Thu thêm tiền"}</button>`);
   }
   footerBtns.push(`<button class="btn btn-outline-secondary" onclick='printInvoiceA4("${order.id}", "${order.order_type}")'>🖨️ In lại</button>`);
+  // Đơn bán lẻ có hàng dê thu mua (không phải toa vàng quy 99 bên bán sỉ) cần in được
+  // "Chứng từ mua vào" (mẫu 02/TNDN) riêng, không chỉ mỗi hoá đơn bán hàng A4 thường.
+  if (tradeIns.length && !isGoldTradeIn) {
+    footerBtns.push(`<button class="btn btn-outline-secondary" onclick='printPurchaseVoucher("${order.id}")'>🧾 In chứng từ mua vào</button>`);
+  }
   if (order.is_quick && order.status === "pending" && order.order_type === "wholesale") {
     footerBtns.push(`<a class="btn btn-outline-primary" href="/orders-wholesale.html?edit=${order.id}">✏️ Sửa hoá đơn nháp</a>`);
   }
@@ -434,6 +445,7 @@ function renderDetail(data) {
 }
 
 window.printInvoiceA4 = printInvoiceA4;
+window.printPurchaseVoucher = printPurchaseVoucher;
 
 window.changeStatus = async function(orderId, status, moneyDebtRemaining = 0, goldDebtRemaining = 0, customerId = "", orderNumber = "") {
   // "Hoàn thành" chỉ nên dùng khi đã thu/hoàn đủ — nếu còn nợ thật (tiền hoặc vàng) mà

@@ -304,6 +304,7 @@
     .nav-links{ display:none; }
   }
 </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 
@@ -318,6 +319,19 @@
       <a href="#download">Tải ứng dụng</a>
     </nav>
     <div class="nav-cta">
+      <div id="navbar-language-slot">
+        <div id="pos-language-switcher" class="is-navbar" data-no-i18n>
+          <label for="pos-language-select" title="Ngôn ngữ">🌐</label>
+          <select id="pos-language-select" aria-label="Ngôn ngữ">
+            <option value="vi">🇻🇳 Tiếng Việt</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
+            <option value="es">🇪🇸 Español</option>
+          </select>
+        </div>
+      </div>
       <a href="/login.html" class="btn btn-outline">Đăng nhập</a>
       <a href="/login.html" class="btn btn-nav-primary">Dùng thử miễn phí</a>
     </div>

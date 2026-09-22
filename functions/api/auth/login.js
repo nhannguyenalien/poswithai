@@ -31,8 +31,16 @@ export async function onRequest({ request, env }) {
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) return errorJson("Email hoặc mật khẩu không đúng", 401);
 
+  const authTime = Math.floor(Date.now() / 1000);
   const token = await createToken(
-    { userId: user.id, tenantId: user.tenant_id, email: user.email },
+    {
+      userId: user.id,
+      tenantId: user.tenant_id,
+      email: user.email,
+      name: user.name,
+      authMethod: "password",
+      authTime,
+    },
     env.JWT_SECRET
   );
 

@@ -22,6 +22,7 @@
     .filter-bar { background: #f8fafc; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
     .tab-content-custom { padding-top: 20px; }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -49,6 +50,10 @@
               <option value="lastmonth">Tháng trước</option>
               <option value="year">Năm nay</option>
             </select>
+            <label class="form-check mb-0 text-nowrap">
+              <input id="include-drafts" class="form-check-input" type="checkbox" onchange="loadAll()"/>
+              <span class="form-check-label">Hiển thị đơn nháp</span>
+            </label>
             <button class="btn btn-primary btn-sm" onclick="loadAll()">🔍 Xem</button>
           </div>
         </div>
@@ -269,7 +274,12 @@
               <!-- Khách nợ vàng -->
               <div class="col-lg-5">
                 <div class="card h-100">
-                  <div class="card-header"><h3 class="card-title">👤 Khách còn nợ</h3></div>
+                  <div class="card-header">
+                    <h3 class="card-title">👤 Khách còn nợ</h3>
+                    <div class="card-options">
+                      <button id="gold-debtors-toggle" class="btn btn-sm btn-outline-secondary d-none" onclick="toggleGoldDebtors()">Hiển thị toàn bộ</button>
+                    </div>
+                  </div>
                   <div class="table-responsive">
                     <table class="table card-table table-sm table-report">
                       <thead><tr><th>Khách</th><th>SĐT</th><th class="text-end">Nợ vàng</th><th class="text-end">Nợ tiền</th></tr></thead>
@@ -382,7 +392,8 @@ let revenueData = null;
 async function loadRevenue() {
   const from = document.getElementById("date-from").value;
   const to   = document.getElementById("date-to").value;
-  const data = await api.get(`/api/reports/revenue?from=${from}&to=${to}`);
+  const includeDrafts = document.getElementById("include-drafts").checked ? "1" : "0";
+  const data = await api.get(`/api/reports/revenue?from=${from}&to=${to}&include_drafts=${includeDrafts}`);
   revenueData = data;
 
   const { summary, daily, topProducts, byChannel, byPayment, prevPeriod } = data;
@@ -401,7 +412,7 @@ async function loadRevenue() {
   document.getElementById("s-avg").textContent = fmtVND(summary.avg_order_value);
   document.getElementById("s-pending").textContent = `${fmtNum(summary.pending_orders)} đơn đang chờ`;
   document.getElementById("s-cancelled").textContent = fmtNum(summary.cancelled_orders);
-  document.getElementById("s-pending-revenue").textContent = `Nợ thu: ${fmtVND(summary.pending_revenue)}`;
+  document.getElementById("s-pending-revenue").textContent = `Nợ phải thu hiện tại: ${fmtVND(summary.pending_revenue)}`;
 
   // Daily chart
   lineChart("chart-daily",
@@ -505,10 +516,35 @@ window.loadStock = async function(filter = "all") {
 };
 
 // ── LOAD GOLD ────────────────────────────────────────
+let goldDebtorsData = [];
+let showAllGoldDebtors = false;
+
+function renderGoldDebtors() {
+  const visible = showAllGoldDebtors ? goldDebtorsData : goldDebtorsData.slice(0, 20);
+  document.getElementById("gold-debtors-rows").innerHTML = visible.map(c =>
+    `<tr>
+      <td class="fw-medium">${c.customer_name || "Khách vãng lai"}</td>
+      <td class="text-muted">${c.customer_phone || "—"}</td>
+      <td class="text-end ${parseFloat(c.gold_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtGold(c.gold_debt)}</td>
+      <td class="text-end ${parseInt(c.money_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtVND(c.money_debt)}</td>
+    </tr>`
+  ).join("") || `<tr><td colspan="4" class="text-muted text-center py-3">Không có khách nào còn nợ 🎉</td></tr>`;
+
+  const toggle = document.getElementById("gold-debtors-toggle");
+  toggle.classList.toggle("d-none", goldDebtorsData.length <= 20);
+  toggle.textContent = showAllGoldDebtors ? "Thu gọn" : `Hiển thị toàn bộ (${goldDebtorsData.length})`;
+}
+
+window.toggleGoldDebtors = function() {
+  showAllGoldDebtors = !showAllGoldDebtors;
+  renderGoldDebtors();
+};
+
 async function loadGold() {
   const from = document.getElementById("date-from").value;
   const to   = document.getElementById("date-to").value;
-  const data = await api.get(`/api/reports/gold?from=${from}&to=${to}`);
+  const includeDrafts = document.getElementById("include-drafts").checked ? "1" : "0";
+  const data = await api.get(`/api/reports/gold?from=${from}&to=${to}&include_drafts=${includeDrafts}`);
 
   const { summary, goldDebtors, daily } = data;
   const s = summary;
@@ -527,15 +563,10 @@ async function loadGold() {
     [{ label: "Vàng giao (chỉ)", data: daily.map(d => parseFloat(d.gold_delivered || 0)) }]
   );
 
-  // Debtors
-  document.getElementById("gold-debtors-rows").innerHTML = goldDebtors.map(c =>
-    `<tr>
-      <td class="fw-medium">${c.customer_name || "Khách vãng lai"}</td>
-      <td class="text-muted">${c.customer_phone || "—"}</td>
-      <td class="text-end ${parseFloat(c.gold_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtGold(c.gold_debt)}</td>
-      <td class="text-end ${parseInt(c.money_debt)>0 ? "text-danger fw-bold" : "text-muted"}">${fmtVND(c.money_debt)}</td>
-    </tr>`
-  ).join("") || `<tr><td colspan="4" class="text-muted text-center py-3">Không có khách nào còn nợ 🎉</td></tr>`;
+  // Debtors: tải đủ dữ liệu, mặc định chỉ hiện 20 dòng để bảng gọn.
+  goldDebtorsData = goldDebtors;
+  showAllGoldDebtors = false;
+  renderGoldDebtors();
 }
 
 // ── EXPORT CSV ───────────────────────────────────────

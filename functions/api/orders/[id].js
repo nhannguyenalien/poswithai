@@ -1,5 +1,6 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
 import { requireAuth } from "../../_auth.js";
+import { ensureCustomerSupportLink, syncCustomerSupportContext } from "../../_support-chat.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -19,7 +20,10 @@ async function getOrder({ env }, { tenantId }, id) {
 
   const orders = await sql`
     SELECT o.*, c.name AS customer_name, c.phone AS customer_phone,
-           c.address AS customer_address, c.id_card AS customer_id_card
+           c.address AS customer_address, c.id_card AS customer_id_card,
+           c.dob AS customer_dob, c.id_issue_date AS customer_id_issue_date,
+           c.bank_name AS customer_bank_name, c.bank_account AS customer_bank_account,
+           c.support_chat_url, c.support_chat_session
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
     WHERE o.id = ${id} AND o.tenant_id = ${tenantId}
@@ -27,6 +31,15 @@ async function getOrder({ env }, { tenantId }, id) {
   `;
   if (!orders.length) return errorJson("Không tìm thấy đơn hàng", 404);
 
+  if (orders[0].customer_id && !orders[0].support_chat_url) {
+    try {
+      orders[0] = await ensureCustomerSupportLink(sql, env, tenantId, {
+        ...orders[0], id: orders[0].customer_id, name: orders[0].customer_name,
+      });
+    } catch (err) {
+      console.error("Không tạo được link hỗ trợ khi mở đơn:", err.message);
+    }
+  }
   // LEFT JOIN (không INNER) vì hoá đơn nháp cho phép mặt hàng gõ tay không gắn với
   // product_variant nào — product_name/sku khi đó rơi về item_name / rỗng.
   const items = await sql`
@@ -62,7 +75,7 @@ async function updateOrder(context, auth, id) {
   return changeOrderStatus(context, auth, id, body);
 }
 
-async function changeOrderStatus({ env }, { tenantId }, id, body) {
+export async function changeOrderStatus({ env }, { tenantId }, id, body) {
   const { status } = body;
   if (!["completed", "cancelled", "refunded"].includes(status)) {
     return errorJson("Status không hợp lệ", 422);
@@ -110,6 +123,11 @@ async function changeOrderStatus({ env }, { tenantId }, id, body) {
     RETURNING id, order_number, status, total
   `;
 
+  if (orders[0].customer_id) {
+    try { await syncCustomerSupportContext(sql, env, tenantId, orders[0].customer_id); }
+    catch (err) { console.error("Không đồng bộ được dữ liệu khách sau khi đổi trạng thái:", err.message); }
+  }
+
   return json(rows[0]);
 }
 
@@ -118,7 +136,7 @@ async function changeOrderStatus({ env }, { tenantId }, id, body) {
 // nháp (is_quick) còn pending — hoá đơn nháp chưa bao giờ đụng tới kho lúc tạo nên
 // sửa lại không làm lệch tồn kho; đơn thật/đã đóng thì KHÔNG cho sửa để không phá vỡ
 // lịch sử giao dịch đã chốt (payments đã ghi nhận dựa trên total cũ).
-async function editDraftOrder({ env }, { tenantId }, id, body) {
+export async function editDraftOrder({ env }, { tenantId }, id, body) {
   const sql = getDb(env);
 
   const existingRows = await sql`SELECT * FROM orders WHERE id = ${id} AND tenant_id = ${tenantId} LIMIT 1`;
@@ -148,12 +166,35 @@ async function editDraftOrder({ env }, { tenantId }, id, body) {
     }
   }
 
-  // Đổi khách hàng lúc sửa: snapshot "nợ cũ" gửi lên (nếu có) luôn thuộc về khách CŨ
-  // (client chỉ tính 1 lần lúc mở form sửa) — sang khách mới thì snapshot đó sai chủ,
-  // bỏ về 0 thay vì gắn nhầm nợ cũ của người này cho người khác trên hoá đơn in.
-  if (customer_id && existing.customer_id && customer_id !== existing.customer_id) {
-    old_money_debt = 0;
-    old_gold_debt_99 = 0;
+  // Nếu đổi khách, không tin snapshot client vì có thể chưa tải xong hoặc đã cũ. Chốt lại
+  // công nợ HIỆN TẠI của khách mới ngay tại backend. Toa đang sửa vẫn thuộc khách cũ ở
+  // thời điểm query nên không bị cộng chính nó vào snapshot của khách mới.
+  if (customer_id !== existing.customer_id) {
+    const debtRows = await sql`
+      WITH payment_totals AS (
+        SELECT order_id, SUM(amount) AS paid
+        FROM payments
+        WHERE tenant_id = ${tenantId} AND status = 'completed'
+        GROUP BY order_id
+      ), order_debt AS (
+        SELECT COALESCE(SUM(o.total - COALESCE(p.paid, 0)), 0) AS money_debt,
+               COALESCE(SUM(o.gold_debt_99), 0) AS gold_debt_99
+        FROM orders o
+        LEFT JOIN payment_totals p ON p.order_id = o.id
+        WHERE o.tenant_id = ${tenantId} AND o.customer_id = ${customer_id}
+          AND o.status NOT IN ('cancelled', 'refunded')
+      ), adjustment_debt AS (
+        SELECT COALESCE(SUM(money_amount), 0) AS money_debt,
+               COALESCE(SUM(gold_amount_99), 0) AS gold_debt_99
+        FROM customer_debt_adjustments
+        WHERE tenant_id = ${tenantId} AND customer_id = ${customer_id}
+      )
+      SELECT o.money_debt + a.money_debt AS money_debt,
+             o.gold_debt_99 + a.gold_debt_99 AS gold_debt_99
+      FROM order_debt o CROSS JOIN adjustment_debt a
+    `;
+    old_money_debt = parseInt(debtRows[0]?.money_debt) || 0;
+    old_gold_debt_99 = debtRows[0]?.gold_debt_99 || 0;
   }
 
   const subtotal = items.reduce((sum, i) => sum + i.unit_price * i.quantity - (i.discount || 0), 0);
@@ -212,6 +253,11 @@ async function editDraftOrder({ env }, { tenantId }, id, body) {
     WHERE id = ${id} AND tenant_id = ${tenantId}
     RETURNING id, order_number, total, gold_debt_99
   `;
+
+  for (const customerId of new Set([existing.customer_id, customer_id].filter(Boolean))) {
+    try { await syncCustomerSupportContext(sql, env, tenantId, customerId); }
+    catch (err) { console.error("Không đồng bộ được dữ liệu khách sau khi sửa đơn:", err.message); }
+  }
 
   return json(rows[0]);
 }

@@ -2,6 +2,7 @@
 // POST /api/setup — Tạo tenant + gắn Google account, chỉ dùng được với setupPending token
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
 import { verifyToken, createToken, hashPassword } from "../../_auth.js";
+import { createMobileSession } from "../../_mobile-session.js";
 
 export async function onRequest({ request, env }) {
   const preflight = handleOptions(request);
@@ -89,6 +90,19 @@ export async function onRequest({ request, env }) {
     ]);
   } catch (err) {
     return errorJson("Không tạo được tiệm, vui lòng thử lại: " + err.message, 500);
+  }
+
+  if (payload.mobile) {
+    const session = await createMobileSession(sql, env, {
+      id: userId,
+      tenant_id: tenantId,
+      email: payload.email,
+    });
+    return json({
+      ...session,
+      user: { id: userId, name: payload.name || payload.email, email: payload.email },
+      tenant: { id: tenantId, name: tenant_name, slug: tenant_slug },
+    }, 201);
   }
 
   // Tạo full JWT để đăng nhập luôn

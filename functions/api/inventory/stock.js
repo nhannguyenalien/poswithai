@@ -1,5 +1,6 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
+import { validateUuid, validationError } from "../../_validation.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -7,12 +8,15 @@ export async function onRequest(context) {
 
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
-
   if (context.request.method !== "GET") return errorJson("Method not allowed", 405);
+  const allowed = await requirePermission(context, auth, "inventory.read");
+  if (allowed instanceof Response) return allowed;
 
   const { request, env } = context;
   const url = new URL(request.url);
   const variantId = url.searchParams.get("variant_id");
+  const idError = validateUuid(variantId, "variant_id", { optional: true });
+  if (idError) return validationError([idError]);
   const sql = getDb(env);
 
   // Ngưỡng tồn thấp lấy từ settings — đồng nhất với trang Báo cáo
@@ -33,7 +37,7 @@ export async function onRequest(context) {
       WHERE ss.product_variant_id = ${variantId} AND ss.tenant_id = ${auth.tenantId}
       LIMIT 1
     `;
-    return json(rows[0] || { qty: 0 });
+    return json(rows.length ? { ...rows[0], qty: Number(rows[0].qty || 0) } : { qty: 0 });
   }
 
   // Tồn kho toàn bộ
@@ -53,10 +57,16 @@ export async function onRequest(context) {
     ORDER BY p.name, pv.sku
   `;
 
+  const items = rows.map(row => ({
+    ...row,
+    qty: Number(row.qty || 0),
+    price: Number(row.price || 0),
+    last_cost: row.last_cost === null ? null : Number(row.last_cost),
+  }));
   return json({
-    items: rows,
+    items,
     total_skus: rows.length,
     threshold,
-    low_stock: rows.filter(r => parseInt(r.qty) <= threshold),
+    low_stock: items.filter(item => item.qty <= threshold),
   });
 }

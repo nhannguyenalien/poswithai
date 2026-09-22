@@ -2,7 +2,7 @@
 // GET  /api/categories       — danh sách danh mục
 // POST /api/categories       — tạo danh mục mới
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -10,6 +10,8 @@ export async function onRequest(context) {
 
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
+  const allowed = await requirePermission(context, auth, context.request.method === "GET" ? "categories.read" : "categories.write");
+  if (allowed instanceof Response) return allowed;
 
   if (context.request.method === "GET")  return getCategories(context, auth);
   if (context.request.method === "POST") return createCategory(context, auth);

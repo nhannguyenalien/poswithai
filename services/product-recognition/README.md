@@ -1,13 +1,14 @@
 # Product recognition service
 
-CPU image-embedding service used by the POS API to match a captured image against
-the tenant's existing product-image catalog. It is industry-neutral: results are
-restricted to products supplied in the request rather than fixed retail classes.
+CPU SigLIP image-embedding service. The POS API stores normalized 768-dimension
+embeddings in PostgreSQL/pgvector and performs tenant-scoped cosine search. The
+service is stateless and never receives database credentials or the product catalog.
 
 Required environment variables:
 
 - `RECOGNITION_API_KEY`: shared secret used only between the POS API and this service.
-- `ALLOWED_IMAGE_HOSTS`: comma-separated HTTPS hosts from which catalog images may be fetched.
+- `MODEL_ID`: optional Hugging Face model id; defaults to `google/siglip-base-patch16-224`.
+- `MODEL_VERSION`: optional stored version label used to re-index safely after model changes.
 
 Run locally:
 
@@ -15,6 +16,8 @@ Run locally:
 docker build -t pos-product-recognition services/product-recognition
 docker run --rm -p 8080:8080 \
   -e RECOGNITION_API_KEY=replace-me \
-  -e ALLOWED_IMAGE_HOSTS=s3a.schoolsai.work \
   pos-product-recognition
 ```
+
+`POST /v1/embed` accepts a JPEG/PNG/WebP multipart `image` and returns a unit
+embedding. Keep the service private behind the shared bearer credential.

@@ -27,7 +27,11 @@
     @media print { .toolbar { display: none !important; } .a4 { padding: 0; } }
 
     /* Invoice layout */
+    .a4 { position: relative; }
     .header { display: flex; justify-content: space-between; margin-bottom: 16px; align-items: flex-start; }
+    .support-qr-corner { position: absolute; top: 5mm; right: 5mm; width: 24mm; text-align: center; font-size: 8pt; line-height: 1.1; font-weight: 600; }
+    .support-qr-corner img { display: block; width: 22mm; height: 22mm; margin: 0 auto 2px; }
+    .a4.has-support-qr .header, .a4.has-support-qr .ref-shop, .a4.has-support-qr .ref-title, .a4.has-support-qr .ref-inv-no { padding-right: 27mm; }
     .shop-info h1 { font-size: 18pt; font-weight: bold; }
     .shop-info p  { font-size: 11pt; margin: 2px 0; }
     .invoice-title { text-align: right; }
@@ -102,6 +106,7 @@
       .no-print { display: none !important; }
     }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 
@@ -115,6 +120,7 @@
   <div class="center" style="padding:40px; color:#999">Đang tải hoá đơn...</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
 import { getToken } from "/js/auth.js";
 
@@ -212,8 +218,9 @@ async function load() {
   });
 
   document.getElementById("invoice").innerHTML = useRefLayout ? `
-    <!-- HEADER theo mẫu tham chiếu -->
-    <div class="ref-shop">${shopName}${shopAddr ? " — " + shopAddr : ""}${shopPhone ? " — ĐT: " + shopPhone : ""}</div>
+    <!-- HEADER theo mẫu tham chiếu — đơn nháp (chưa chốt chính thức) thì không lộ
+         thông tin cửa hàng trên tờ hoá đơn tạm này -->
+    ${order.is_quick ? "" : `<div class="ref-shop">${shopName}${shopAddr ? " — " + shopAddr : ""}${shopPhone ? " — ĐT: " + shopPhone : ""}</div>`}
     <div class="ref-title">HOÁ ĐƠN BÁN HÀNG${order.is_quick ? ` <span class="draft-tag">(NHÁP)</span>` : ""}</div>
     <div class="ref-inv-no">Số: <strong>${order.order_number}</strong></div>
     <div class="ref-date">Ngày: <span class="val">${shortDate}</span></div>
@@ -375,14 +382,17 @@ async function load() {
       </div>
     </div>
   ` : `
-    <!-- HEADER -->
+    <!-- HEADER — đơn sỉ ở dạng nháp thì không lộ thông tin cửa hàng trên tờ hoá đơn
+         tạm này (khớp với nhánh mẫu tham chiếu useRefLayout phía trên) -->
     <div class="header">
+      ${(type === "wholesale" && order.is_quick) ? `<div class="shop-info"></div>` : `
       <div class="shop-info">
         <h1>${shopName}</h1>
         <p>📍 ${shopAddr}</p>
         ${shopPhone ? `<p>📞 ${shopPhone}</p>` : ""}
         ${shopTax   ? `<p>MST: ${shopTax}</p>`   : ""}
       </div>
+      `}
       <div class="invoice-title">
         <h2>${type === "wholesale" ? "HOÁ ĐƠN BÁN SỈ" : "HOÁ ĐƠN BÁN HÀNG"}${order.is_quick ? ` <span style="color:#dc2626">(NHÁP)</span>` : ""}</h2>
         <div class="inv-no">Số: <strong>${order.order_number}</strong></div>
@@ -627,6 +637,21 @@ async function load() {
       </div>
     </div>
   `;
+
+  // Cờ tách riêng theo Bán lẻ/Bán sỉ — tiệm chưa cấu hình lại thì fallback về cờ chung cũ.
+  const isOn = v => v === "true" || v === "1";
+  const qrKey = type === "wholesale" ? "show_support_qr_wholesale" : "show_support_qr_retail";
+  const showQr = (settings[qrKey] !== undefined ? isOn(settings[qrKey]) : isOn(settings.show_support_qr))
+    && order.support_chat_url;
+  if (showQr) {
+    const support = document.createElement("div");
+    support.className = "support-qr-corner";
+    support.innerHTML = '<div id="support-qr"></div><div>Quét để hỗ trợ</div>';
+    const invoice = document.getElementById("invoice");
+    invoice.classList.add("has-support-qr");
+    invoice.prepend(support);
+    new QRCode(document.getElementById("support-qr"), { text: order.support_chat_url, width: 84, height: 84 });
+  }
 
   document.getElementById("inv-title-bar").textContent =
     `${type === "wholesale" ? "Bán sỉ" : "Bán lẻ"} — ${order.order_number}`;

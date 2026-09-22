@@ -50,6 +50,10 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
   const {
     customer_id, customer_name, customer_phone, customer_address,
     customer_tax_code, customer_company,
+    // Thông tin người bán (cá nhân) — dùng cho chứng từ mua vào, đều tuỳ chọn
+    customer_id_card, customer_dob, customer_id_issue_date,
+    customer_bank_name, customer_bank_account,
+    receive_transfer_amount = 0, receive_cash_amount = 0,
     invoice_date, gold_price_per_chi,
     items = [],      // hàng bán ra
     returns = [],    // dê khách trả
@@ -64,7 +68,7 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
   } = body;
 
   if (!gold_price_per_chi) return errorJson("Cần nhập giá vàng 99/chỉ", 422);
-  if (!items.length)        return errorJson("Cần ít nhất 1 hàng bán ra", 422);
+  if (!items.length && !returns.length) return errorJson("Cần ít nhất 1 hàng bán ra hoặc 1 hàng dê thu mua", 422);
 
   // ── Tính toán thống kê vàng ──────────────────────────
   let gold_delivered = 0, total_making_fee = 0;
@@ -120,6 +124,7 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
     }
     const converted = net * ratio;
     gold_returned += converted;
+    const unit_price = r.unit_price || 0;
     return {
       id: crypto.randomUUID(),
       sort_order: i,
@@ -129,6 +134,8 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
       net_weight:       net,
       conversion_text:  conv_text,
       converted_weight: converted,
+      unit_price,
+      line_total: Math.round(net * unit_price), // thành tiền mua vào của dòng (TL vàng thực tế × đơn giá)
     };
   });
 
@@ -161,6 +168,9 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
     INSERT INTO gold_invoices (
       id, tenant_id, invoice_number, customer_id, customer_name,
       customer_phone, customer_address, customer_tax_code, customer_company,
+      customer_id_card, customer_dob, customer_id_issue_date,
+      customer_bank_name, customer_bank_account,
+      receive_transfer_amount, receive_cash_amount,
       invoice_date, gold_price_per_chi,
       gold_delivered, gold_prev_debt, gold_transferred, gold_returned,
       gold_to_money, gold_remaining, gold_customer_paid, gold_customer_debt,
@@ -173,6 +183,9 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
       ${customer_id || null}, ${customer_name || null},
       ${customer_phone || null}, ${customer_address || null},
       ${customer_tax_code || null}, ${customer_company || null},
+      ${customer_id_card || null}, ${customer_dob || null}, ${customer_id_issue_date || null},
+      ${customer_bank_name || null}, ${customer_bank_account || null},
+      ${receive_transfer_amount || 0}, ${receive_cash_amount || 0},
       ${date}, ${gold_price_per_chi},
       ${gold_delivered}, ${gold_prev_debt}, ${gold_transferred}, ${gold_returned},
       ${gold_to_money}, ${gold_remaining}, ${gold_customer_paid}, ${gold_customer_debt},
@@ -208,11 +221,13 @@ async function createInvoice({ request, env }, { tenantId, userId }) {
       INSERT INTO gold_invoice_returns (
         id, invoice_id, sort_order, gold_type_name,
         gross_weight, stone_weight, net_weight, conversion_text, converted_weight,
+        unit_price, line_total,
         created_at
       ) VALUES (
         ${ret.id}, ${id}, ${ret.sort_order}, ${ret.gold_type_name},
         ${ret.gross_weight}, ${ret.stone_weight}, ${ret.net_weight},
         ${ret.conversion_text}, ${ret.converted_weight},
+        ${ret.unit_price}, ${ret.line_total},
         ${now}
       )
     `;

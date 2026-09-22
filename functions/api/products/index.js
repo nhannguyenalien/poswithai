@@ -1,11 +1,14 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
+import { parsePagination, pageMeta } from "../../_validation.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
   if (preflight) return preflight;
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
+  const allowed = await requirePermission(context, auth, context.request.method === "GET" ? "products.read" : "products.write");
+  if (allowed instanceof Response) return allowed;
   if (context.request.method === "GET")  return getProducts(context, auth);
   if (context.request.method === "POST") return createProduct(context, auth);
   return errorJson("Method not allowed", 405);
@@ -19,6 +22,22 @@ async function getProducts({ request, env }, { tenantId }) {
   const statusParam = url.searchParams.get("status");
   const status = statusParam === null ? "active" : statusParam;
   const sql    = getDb(env);
+  const pagination = parsePagination(url);
+  if (pagination.errors.length) return errorJson("Phân trang không hợp lệ", 422, "VALIDATION_ERROR", pagination.errors);
+  const { limit, offset } = pagination;
+
+  const countRows = await sql`
+    SELECT COUNT(*) AS total FROM products p
+    WHERE p.tenant_id = ${tenantId}
+      AND (${status} = '' OR p.status = ${status})
+      AND (${type} = '' OR p.product_type = ${type})
+      AND (${search} = '' OR p.name ILIKE ${'%'+search+'%'} OR p.sku ILIKE ${'%'+search+'%'}
+        OR EXISTS (
+          SELECT 1 FROM product_variants searched_pv
+          WHERE searched_pv.product_id = p.id
+            AND (searched_pv.sku ILIKE ${'%'+search+'%'} OR searched_pv.barcode ILIKE ${'%'+search+'%'})
+        ))
+  `;
 
   const rows = await sql`
     SELECT p.id, p.sku, p.name, p.product_type, p.base_price, p.status,
@@ -28,6 +47,9 @@ async function getProducts({ request, env }, { tenantId }) {
            b.standard AS brand_standard,
            b.address  AS brand_address,
            c.name AS category_name,
+           (SELECT pi.image_url FROM product_images pi
+            WHERE pi.tenant_id = p.tenant_id AND pi.product_id = p.id
+            ORDER BY pi.is_primary DESC, pi.sort_order, pi.created_at LIMIT 1) AS primary_image_url,
            COALESCE(SUM(ss.qty), 0) AS total_stock
     FROM products p
     LEFT JOIN categories c       ON c.id  = p.category_id
@@ -37,13 +59,18 @@ async function getProducts({ request, env }, { tenantId }) {
     WHERE p.tenant_id = ${tenantId}
       AND (${status} = '' OR p.status = ${status})
       AND (${type}   = '' OR p.product_type = ${type})
-      AND (${search} = '' OR p.name ILIKE ${'%'+search+'%'} OR p.sku ILIKE ${'%'+search+'%'})
+      AND (${search} = '' OR p.name ILIKE ${'%'+search+'%'} OR p.sku ILIKE ${'%'+search+'%'}
+        OR EXISTS (
+          SELECT 1 FROM product_variants searched_pv
+          WHERE searched_pv.product_id = p.id
+            AND (searched_pv.sku ILIKE ${'%'+search+'%'} OR searched_pv.barcode ILIKE ${'%'+search+'%'})
+        ))
     GROUP BY p.id, p.sku, p.name, p.product_type, p.base_price, p.status,
              p.brand_id, b.name, b.symbol, b.standard, b.address, c.name
     ORDER BY p.created_at DESC
-    LIMIT 200
+    LIMIT ${limit} OFFSET ${offset}
   `;
-  return json({ products: rows });
+  return json({ products: rows, pagination: pageMeta({ limit, offset, returned: rows.length, total: countRows[0].total }) });
 }
 
 async function createProduct({ request, env }, { tenantId }) {

@@ -6,6 +6,7 @@
   <title>Khách hàng — POS</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
   <link rel="stylesheet" href="/css/app.css"/>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -17,7 +18,12 @@
       <div class="container-xl">
         <div class="row align-items-center">
           <div class="col"><h2 class="page-title">Khách hàng</h2></div>
-          <div class="col-auto"><button class="btn btn-primary" onclick="openAddModal()">+ Thêm khách</button></div>
+          <div class="col-auto">
+            <div class="btn-list">
+              <button id="btn-sync-support-data" class="btn" onclick="syncSupportData()">Đồng bộ dữ liệu bot</button>
+              <button class="btn btn-primary" onclick="openAddModal()">+ Thêm khách</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -40,7 +46,7 @@
                 <tr>
                   <th>Họ tên</th><th>SĐT</th><th>Email</th>
                   <th class="text-center">Số đơn</th>
-                  <th class="text-end">Tổng chi tiêu</th>
+                  <th>Link hỗ trợ</th>
                   <th></th>
                 </tr>
               </thead>
@@ -57,7 +63,7 @@
 
 <!-- Modal thêm/sửa khách -->
 <div class="modal modal-blur fade" id="modal-customer" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
+  <div class="modal-dialog modal-md modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="modal-cust-title">Thêm khách hàng</h5>
@@ -100,6 +106,34 @@
         <div class="mb-3">
           <label class="form-label">Địa chỉ</label>
           <textarea id="c-address" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="row" id="c-dob-section">
+          <div class="col mb-3">
+            <label class="form-label">Ngày sinh</label>
+            <input id="c-dob" type="text" class="form-control" placeholder="dd/mm/yyyy"/>
+          </div>
+          <div class="col mb-3">
+            <label class="form-label">Ngày cấp CCCD</label>
+            <input id="c-id-issue-date" type="text" class="form-control" placeholder="dd/mm/yyyy"/>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col mb-3">
+            <label class="form-label">Ngân hàng</label>
+            <input id="c-bank-name" type="text" class="form-control"/>
+          </div>
+          <div class="col mb-3">
+            <label class="form-label">Số tài khoản</label>
+            <input id="c-bank-account" type="text" class="form-control"/>
+          </div>
+        </div>
+        <div class="mb-3 d-none" id="c-support-section">
+          <label class="form-label">Link hỗ trợ riêng</label>
+          <div class="input-group">
+            <input id="c-support-link" type="text" class="form-control" readonly/>
+            <button type="button" class="btn" onclick="copyCurrentSupportLink()">Sao chép</button>
+            <a id="c-support-open" class="btn btn-outline-primary" target="_blank" rel="noopener">Mở</a>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -160,7 +194,12 @@
           <td>${c.phone || "<span class='text-muted'>—</span>"}</td>
           <td>${c.email || "<span class='text-muted'>—</span>"}</td>
           <td class="text-center"><span class="badge bg-blue-lt">${c.total_orders}</span></td>
-          <td class="text-end">${fmtVND(c.total_spent)}</td>
+          <td>${c.support_chat_url ? `
+            <div class="btn-list flex-nowrap">
+              <a class="btn btn-sm btn-outline-primary" href="${c.support_chat_url}" target="_blank" rel="noopener">Mở link</a>
+              <button class="btn btn-sm btn-ghost-secondary" onclick='copySupportLink(${JSON.stringify(c.support_chat_url)})'>Sao chép</button>
+            </div>` : `<span class="text-muted">Chưa có</span>`}
+          </td>
           <td class="text-end">
             <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openHistory("${c.id}", "${c.name}")'>Lịch sử</button>
             <button class="btn btn-sm btn-ghost-secondary" onclick='openEditModal(${JSON.stringify(c)})'>Sửa</button>
@@ -172,12 +211,43 @@
     }
   };
 
+  window.syncSupportData = async function() {
+    const btn = document.getElementById("btn-sync-support-data");
+    const originalLabel = btn.textContent;
+    let after = "";
+    let synced = 0;
+    const errors = [];
+
+    btn.disabled = true;
+    try {
+      do {
+        const params = new URLSearchParams({ sync_context: "1", limit: "10" });
+        if (after) params.set("after", after);
+        const result = await api.post(`/api/customers/support-links?${params}`, {});
+        synced += Number(result.synced || 0);
+        errors.push(...(result.errors || []));
+        after = result.next_cursor || "";
+        btn.textContent = `Đang đồng bộ ${synced}...`;
+      } while (after);
+
+      const errorNote = errors.length ? `; ${errors.length} khách lỗi, có thể bấm lại để thử tiếp` : "";
+      alert(`Đã đồng bộ dữ liệu cho ${synced} khách${errorNote}.`);
+      loadCustomers();
+    } catch (err) {
+      alert(`Đã đồng bộ ${synced} khách trước khi dừng: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  };
+
   // "Cá nhân" ⇄ "Doanh nghiệp" — đổi nhãn "Họ tên"→"Tên công ty", ẩn CCCD (không cần
   // với doanh nghiệp), hiện ô MST + nút tra cứu tự động điền tên/địa chỉ.
   window.onCustomerTypeChange = function() {
     const isBiz = document.getElementById("c-type-business").checked;
     document.getElementById("c-tax-section").classList.toggle("d-none", !isBiz);
     document.getElementById("c-idcard-section").classList.toggle("d-none", isBiz);
+    document.getElementById("c-dob-section").classList.toggle("d-none", isBiz);
     document.getElementById("c-name-label").textContent = isBiz ? "Tên công ty" : "Họ tên";
   };
 
@@ -209,6 +279,12 @@
     document.getElementById("c-address").value = "";
     document.getElementById("c-taxcode").value = "";
     document.getElementById("c-tax-status").innerHTML = "";
+    document.getElementById("c-dob").value = "";
+    document.getElementById("c-id-issue-date").value = "";
+    document.getElementById("c-bank-name").value = "";
+    document.getElementById("c-bank-account").value = "";
+    document.getElementById("c-support-section").classList.add("d-none");
+    document.getElementById("c-support-link").value = "";
     document.getElementById("c-type-individual").checked = true;
     onCustomerTypeChange();
     document.getElementById("modal-cust-title").textContent = "Thêm khách hàng";
@@ -224,6 +300,13 @@
     document.getElementById("c-address").value = c.address || "";
     document.getElementById("c-taxcode").value = c.tax_code || "";
     document.getElementById("c-tax-status").innerHTML = "";
+    document.getElementById("c-dob").value = c.dob || "";
+    document.getElementById("c-id-issue-date").value = c.id_issue_date || "";
+    document.getElementById("c-bank-name").value = c.bank_name || "";
+    document.getElementById("c-bank-account").value = c.bank_account || "";
+    document.getElementById("c-support-link").value = c.support_chat_url || "";
+    document.getElementById("c-support-open").href = c.support_chat_url || "#";
+    document.getElementById("c-support-section").classList.toggle("d-none", !c.support_chat_url);
     document.getElementById(c.is_business ? "c-type-business" : "c-type-individual").checked = true;
     onCustomerTypeChange();
     document.getElementById("modal-cust-title").textContent = "Sửa khách hàng";
@@ -241,6 +324,10 @@
       address:     document.getElementById("c-address").value.trim(),
       is_business: isBiz,
       tax_code:    isBiz ? document.getElementById("c-taxcode").value.trim() : "",
+      dob:            document.getElementById("c-dob").value.trim(),
+      id_issue_date:  document.getElementById("c-id-issue-date").value.trim(),
+      bank_name:      document.getElementById("c-bank-name").value.trim(),
+      bank_account:   document.getElementById("c-bank-account").value.trim(),
     };
     if (!body.name) return alert(isBiz ? "Tên công ty là bắt buộc" : "Tên là bắt buộc");
     if (isBiz && !body.tax_code) return alert("Mã số thuế là bắt buộc với khách doanh nghiệp");
@@ -252,6 +339,19 @@
     } catch (err) { alert(err.message); }
   };
 
+  window.copySupportLink = async function(link) {
+    try {
+      await navigator.clipboard.writeText(link);
+      alert("Đã sao chép link hỗ trợ");
+    } catch {
+      prompt("Sao chép link hỗ trợ:", link);
+    }
+  };
+
+  window.copyCurrentSupportLink = function() {
+    return copySupportLink(document.getElementById("c-support-link").value);
+  };
+
   window.openHistory = async function(customerId, name) {
     document.getElementById("hist-name").textContent = name;
     document.getElementById("hist-rows").innerHTML = `<tr><td colspan="4" class="text-muted text-center">Đang tải...</td></tr>`;
@@ -260,18 +360,20 @@
 
     try {
       const { customer, orders } = await api.get(`/api/customers/${customerId}`);
-      const totalSpent = orders.filter(o => o.status === "completed").reduce((s, o) => s + parseInt(o.total), 0);
-
       document.getElementById("hist-summary").innerHTML = `
         <div class="col"><div class="card card-sm"><div class="card-body">
           <div class="text-muted">Tổng đơn</div><div class="h3">${orders.length}</div>
         </div></div></div>
         <div class="col"><div class="card card-sm"><div class="card-body">
-          <div class="text-muted">Tổng chi tiêu</div><div class="h3">${fmtVND(totalSpent)}</div>
-        </div></div></div>
-        <div class="col"><div class="card card-sm"><div class="card-body">
           <div class="text-muted">SĐT</div><div class="h3">${customer.phone || "—"}</div>
-        </div></div></div>`;
+        </div></div></div>
+        ${customer.support_chat_url ? `<div class="col-12 mt-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted">Link hỗ trợ:</span>
+            <a href="${customer.support_chat_url}" target="_blank" rel="noopener">Mở link riêng</a>
+            <button class="btn btn-sm btn-ghost-secondary" onclick='copySupportLink(${JSON.stringify(customer.support_chat_url)})'>Sao chép</button>
+          </div>
+        </div>` : ""}`;
 
       document.getElementById("hist-rows").innerHTML = orders.length ? orders.map(o => `
         <tr>

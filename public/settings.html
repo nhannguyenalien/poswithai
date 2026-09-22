@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Cài đặt — POS</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -82,6 +83,27 @@
                   <label class="form-label">Lời cảm ơn cuối bill</label>
                   <input id="receipt_footer" type="text" class="form-control" placeholder="Cảm ơn quý khách! Hẹn gặp lại 😊"/>
                 </div>
+                <div class="mt-3">
+                  <label class="form-label mb-1">Hiển thị QR hỗ trợ riêng trên hoá đơn</label>
+                  <small class="form-hint d-block mb-2">Mỗi khách hàng có một link chat riêng; khách vãng lai không hiện QR. Bật/tắt riêng theo từng loại hoá đơn.</small>
+                  <label class="form-check form-switch">
+                    <input id="show_support_qr_retail" class="form-check-input" type="checkbox"/>
+                    <span class="form-check-label">Hoá đơn bán lẻ</span>
+                  </label>
+                  <label class="form-check form-switch">
+                    <input id="show_support_qr_wholesale" class="form-check-input" type="checkbox"/>
+                    <span class="form-check-label">Hoá đơn bán sỉ</span>
+                  </label>
+                  <label class="form-check form-switch">
+                    <input id="show_support_qr_gold_order" class="form-check-input" type="checkbox"/>
+                    <span class="form-check-label">Phiếu gia công</span>
+                  </label>
+                </div>
+                <div class="mt-3">
+                  <label class="form-label">API key Social / Knowledge Worker</label>
+                  <input id="knowledge_worker_api_key" type="password" class="form-control" autocomplete="new-password" placeholder="Nhập API key của tenant"/>
+                  <small class="form-hint">Dùng để tạo link hỗ trợ riêng cho khách hàng. Key được lưu theo cửa hàng và không nằm trong mã nguồn.</small>
+                </div>
               </div>
             </div>
           </div>
@@ -144,6 +166,35 @@
             </div>
           </div>
 
+          <!-- Tài khoản đăng nhập -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">👤 Tài khoản đăng nhập</h3></div>
+              <form id="account-password-form" class="card-body">
+                <div class="mb-3">
+                  <label class="form-label">Email đăng nhập</label>
+                  <input id="account_email" type="email" class="form-control" readonly/>
+                  <small id="password-status" class="form-hint">Đang kiểm tra...</small>
+                </div>
+                <div id="current-password-wrap" class="mb-3 d-none">
+                  <label class="form-label required">Mật khẩu hiện tại</label>
+                  <input id="current_password" type="password" class="form-control" autocomplete="current-password"/>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label required">Mật khẩu mới</label>
+                  <input id="account_password" type="password" class="form-control" minlength="8" maxlength="128" autocomplete="new-password" required/>
+                  <small class="form-hint">Tối thiểu 8 ký tự.</small>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label required">Nhập lại mật khẩu mới</label>
+                  <input id="account_password_confirmation" type="password" class="form-control" minlength="8" maxlength="128" autocomplete="new-password" required/>
+                </div>
+                <div id="account-password-msg" class="small mb-2"></div>
+                <button id="btn-save-password" type="submit" class="btn btn-primary">🔐 Tạo mật khẩu</button>
+              </form>
+            </div>
+          </div>
+
           <!-- Nút lưu -->
           <!-- Ngành kinh doanh -->
         <div class="col-12">
@@ -183,11 +234,12 @@ requireLogin();
 // Field IDs khớp với settings keys
 const FIELD_KEYS = [
   "shop_name","shop_address","shop_phone","tax_code","shop_website",
-  "low_stock_threshold","receipt_width","currency","receipt_footer",
+  "low_stock_threshold","receipt_width","currency","receipt_footer","knowledge_worker_api_key",
   "einvoice_provider","einvoice_base_url","einvoice_username","einvoice_password",
   "einvoice_pattern","einvoice_serial","einvoice_payment_method",
   "einvoice_vat_rate_cong","einvoice_vat_rate_vang"
 ];
+const CHECKBOX_KEYS = ["show_support_qr_retail", "show_support_qr_wholesale", "show_support_qr_gold_order"];
 
 async function loadSettings() {
   try {
@@ -195,6 +247,15 @@ async function loadSettings() {
     FIELD_KEYS.forEach(key => {
       const el = document.getElementById(key);
       if (el && settings[key] !== undefined) el.value = settings[key];
+    });
+    // Tương thích ngược: cờ show_support_qr cũ (dùng chung cho mọi loại hoá đơn) — nếu
+    // tiệm chưa từng bật riêng 3 cờ mới thì lấy giá trị cũ làm mặc định ban đầu, để không
+    // đột ngột tắt QR đang hiện sẵn trên hoá đơn khi vừa nâng cấp lên bản tách riêng này.
+    const legacyOn = settings.show_support_qr === "true" || settings.show_support_qr === "1";
+    CHECKBOX_KEYS.forEach(key => {
+      const el = document.getElementById(key);
+      if (!el) return;
+      el.checked = settings[key] !== undefined ? (settings[key] === "true" || settings[key] === "1") : legacyOn;
     });
     renderIndustryCheckboxes(settings.enabled_industries || "");
   } catch (err) {
@@ -212,6 +273,10 @@ window.saveSettings = async function() {
   FIELD_KEYS.forEach(key => {
     const el = document.getElementById(key);
     if (el) body[key] = el.value.trim();
+  });
+  CHECKBOX_KEYS.forEach(key => {
+    const el = document.getElementById(key);
+    if (el) body[key] = el.checked ? "true" : "false";
   });
 
   btn.disabled = true; btn.textContent = "⏳ Đang lưu...";
@@ -242,6 +307,66 @@ function renderIndustryCheckboxes(enabledStr) {
 
 renderIndustryCheckboxes("");
 loadSettings();
+
+let accountHasPassword = false;
+let passwordChangeWithoutCurrent = false;
+async function loadAccount() {
+  try {
+    const user = await api.get("/api/auth/me");
+    document.getElementById("account_email").value = user.email || "";
+    accountHasPassword = Boolean(user.has_password);
+    passwordChangeWithoutCurrent = Boolean(user.password_change_without_current);
+    const needsCurrentPassword = accountHasPassword && !passwordChangeWithoutCurrent;
+    document.getElementById("current-password-wrap").classList.toggle("d-none", !needsCurrentPassword);
+    document.getElementById("current_password").required = needsCurrentPassword;
+    document.getElementById("password-status").textContent = accountHasPassword
+      ? (passwordChangeWithoutCurrent
+          ? "Bạn đang đăng nhập bằng Google nên có thể đổi mật khẩu mà không cần nhập mật khẩu hiện tại."
+          : "Tài khoản đã có mật khẩu. Nhập mật khẩu hiện tại để đổi; hoặc đăng nhập bằng Google để bỏ qua bước này.")
+      : "Tài khoản Google chưa có mật khẩu. Hãy tạo để đăng nhập bằng email.";
+    document.getElementById("btn-save-password").textContent = accountHasPassword
+      ? "🔐 Đổi mật khẩu"
+      : "🔐 Tạo mật khẩu";
+  } catch (err) {
+    const msg = document.getElementById("account-password-msg");
+    msg.textContent = "❌ Không tải được thông tin tài khoản: " + err.message;
+    msg.className = "small mb-2 text-danger";
+  }
+}
+
+document.getElementById("account-password-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = document.getElementById("btn-save-password");
+  const msg = document.getElementById("account-password-msg");
+  const password = document.getElementById("account_password").value;
+  const confirmation = document.getElementById("account_password_confirmation").value;
+  if (password !== confirmation) {
+    msg.textContent = "❌ Mật khẩu nhập lại không khớp";
+    msg.className = "small mb-2 text-danger";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "⏳ Đang lưu...";
+  msg.textContent = "";
+  try {
+    await api.post("/api/auth/password", {
+      current_password: document.getElementById("current_password").value,
+      password,
+      password_confirmation: confirmation,
+    });
+    msg.textContent = accountHasPassword ? "✅ Đã đổi mật khẩu" : "✅ Đã tạo mật khẩu. Bạn có thể đăng nhập bằng email.";
+    msg.className = "small mb-2 text-success";
+    document.getElementById("account-password-form").reset();
+    await loadAccount();
+  } catch (err) {
+    msg.textContent = "❌ " + err.message;
+    msg.className = "small mb-2 text-danger";
+  } finally {
+    button.disabled = false;
+    button.textContent = accountHasPassword ? "🔐 Đổi mật khẩu" : "🔐 Tạo mật khẩu";
+  }
+});
+loadAccount();
 </script>
 </body>
 </html>
