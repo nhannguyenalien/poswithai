@@ -1,5 +1,5 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
 import { saveMetalDetails } from "../../_metal.js";
 
 export async function onRequest(context) {
@@ -7,6 +7,8 @@ export async function onRequest(context) {
   if (preflight) return preflight;
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
+  const allowed = await requirePermission(context, auth, "products.write");
+  if (allowed instanceof Response) return allowed;
 
   const { id } = context.params;
   if (context.request.method === "PUT")    return updateVariant(context, auth, id);

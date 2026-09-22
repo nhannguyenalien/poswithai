@@ -964,12 +964,6 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
       setState(() => _error = 'Chiết khấu phải nằm trong khoảng 0–100%');
       return;
     }
-    if (_paymentAmount > _total.abs()) {
-      setState(
-        () => _error = 'Thanh toán không được vượt quá tổng tiền của toa',
-      );
-      return;
-    }
     if (!draft) {
       final confirmed = await _confirm();
       if (confirmed != true || !mounted) return;
@@ -1004,26 +998,13 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
         oldMoneyDebt: _oldDebt!.moneyDebt,
         oldGoldDebt99: _oldDebt!.goldDebt99,
         notes: _notes.text,
+        initialPaymentMethod: !draft && _paymentAmount > 0
+            ? _paymentMethod
+            : null,
+        initialPaymentAmount: !draft && _paymentAmount > 0
+            ? (_total < 0 ? -_paymentAmount : _paymentAmount)
+            : null,
       );
-      if (!draft && _paymentAmount > 0) {
-        try {
-          await widget.repository.createPayment(
-            orderId: result.id,
-            method: _paymentMethod,
-            amount: result.total < 0 ? -_paymentAmount : _paymentAmount,
-          );
-        } on ApiError catch (error) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Đơn ${result.number} đã tạo nhưng chưa ghi được thanh toán: ${error.message}. Hãy thanh toán lại trong chi tiết đơn.',
-                ),
-              ),
-            );
-          }
-        }
-      }
       if (mounted) Navigator.pop(context, result);
     } on ApiError catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -1312,7 +1293,7 @@ class _WholesaleOrderCreatePageState extends State<WholesaleOrderCreatePage> {
                 items: const [
                   DropdownMenuItem(value: 'cash', child: Text('Tiền mặt')),
                   DropdownMenuItem(
-                    value: 'bank_transfer',
+                    value: 'transfer',
                     child: Text('Chuyển khoản'),
                   ),
                   DropdownMenuItem(value: 'card', child: Text('Thẻ')),

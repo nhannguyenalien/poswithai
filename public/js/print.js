@@ -26,6 +26,25 @@ export function printInvoiceA4(orderId, type = "retail", win) {
 }
 
 /**
+ * In bill gọn (thermal 80mm) cho phiếu gia công vàng.
+ * @param {string} orderId
+ */
+export function printGoldOrderReceipt(orderId) {
+  const url = `/print/gold-order-receipt.html?order_id=${orderId}`;
+  openPrint(url, 400, 700);
+}
+
+/**
+ * In "Chứng từ mua vào hàng hoá dịch vụ của cá nhân không kinh doanh" (mẫu 02/TNDN)
+ * cho đơn hàng có hàng dê thu mua (trade-in) — trang Bán lẻ POS.
+ * @param {string} orderId
+ */
+export function printPurchaseVoucher(orderId) {
+  const url = `/print/purchase-voucher.html?order_id=${orderId}`;
+  openPrint(url, 900, 700);
+}
+
+/**
  * Mở sẵn 1 cửa sổ trống NGAY lúc người dùng click (trước khi có lệnh await nào) — trình
  * duyệt chỉ cho window.open() không bị chặn popup khi gọi trực tiếp trong lúc xử lý sự
  * kiện người dùng; gọi sau khi đã await API thường bị chặn âm thầm, không báo lỗi gì cả.

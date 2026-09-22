@@ -85,6 +85,8 @@ class OrderRepository {
     List<Map<String, dynamic>>? tradeInDetails,
     int oldMoneyDebt = 0,
     String oldGoldDebt99 = '0',
+    String? initialPaymentMethod,
+    int? initialPaymentAmount,
   }) async {
     final json = await api.postJson('/orders', {
       'order_type': orderType,
@@ -103,6 +105,11 @@ class OrderRepository {
         'old_gold_debt_99': oldGoldDebt99,
       },
       if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (initialPaymentMethod != null && initialPaymentAmount != null)
+        'initial_payment': {
+          'method': initialPaymentMethod,
+          'amount': initialPaymentAmount,
+        },
     }, idempotent: true);
     return CreateOrderResult(
       id: '${json['order_id']}',

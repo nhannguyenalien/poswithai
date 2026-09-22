@@ -20,12 +20,13 @@ export function getDb(env) {
  * Trả về Response JSON chuẩn.
  * Dùng cho mọi response thành công.
  */
-export function json(data, status = 200) {
+export function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*", // cho phép gọi từ browser local khi dev
+      ...extraHeaders,
     },
   });
 }
@@ -34,8 +35,14 @@ export function json(data, status = 200) {
  * Trả về Response lỗi dạng { error: message }.
  * status mặc định 400.
  */
-export function errorJson(message, status = 400) {
-  return json({ error: message }, status);
+export function errorJson(message, status = 400, code = "BAD_REQUEST", details = null) {
+  return json({
+    // `error` is kept during the web-client migration window.
+    error: message,
+    code,
+    message,
+    details,
+  }, status);
 }
 
 /**
@@ -53,7 +60,7 @@ export function handleOptions(request) {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Idempotency-Key, X-Request-ID",
       },
     });
   }

@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "baseline": {
+    "file": "schema_v2.sql",
+    "sha256": "9aa30e50fef10b7b47e1d32f5718308a0d955c3f871b3710e4f2a73496604861",
+    "source": "reviewed public schema export",
+    "tables": 29
+  },
+  "migrations": [
+    "migrate_mobile_sessions.sql",
+    "migrate_atomic_order_payment.sql",
+    "migrate_product_images.sql",
+    "migrate_product_image_embeddings.sql",
+    "migrate_suppliers_purchase_receipts.sql",
+    "migrate_gold_invoice_purchase_info.sql",
+    "migrate_customer_profile_fields.sql",
+    "migrate_allow_payment_over_order_total.sql"
+  ],
+  "migration_checksums": {
+    "migrate_mobile_sessions.sql": "998b0e7ba12bf6dc944f9e815f9f0b401a3125cbe836c78195b69c46aea5ee02",
+    "migrate_atomic_order_payment.sql": "3ba4e3dbdc5443941240d38454940d403c00e49150b342ad58b662feff5aebfb",
+    "migrate_product_images.sql": "efde2540c6b3125e5d21fe4c9adda31fc86f6fa02f5255cdfc76d2236d7f41ed",
+    "migrate_product_image_embeddings.sql": "9b16af41b30434c62ec9703356afdecd7a826a32cb23171621cf5c0edc9be1ab",
+    "migrate_suppliers_purchase_receipts.sql": "b34d1a4dc7ea17d11cae759f73ca4a37d3a0b98b6e587f3d7ca5ca7160e4befc",
+    "migrate_gold_invoice_purchase_info.sql": "b1803a818602476bfe1c0e2f8fa5d2a299f3052611544f3f2be01900689c441a",
+    "migrate_customer_profile_fields.sql": "617273878439d2ed3463bac91d15606a36067a9b4e3a59bf66d4b9a588b3c2c4",
+    "migrate_allow_payment_over_order_total.sql": "28e39c5ccafd4432fbae209f3c2cef8028c83a9d9f5dfea95641c5fa4c2b8222"
+  },
+  "policy": "Apply in listed order; record checksum and applied_at in schema_migrations. Never run production migrations from an app request."
+}

@@ -6,6 +6,7 @@
   <title>Sản phẩm — POS</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
   <link rel="stylesheet" href="/css/app.css"/>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
 <div class="page">
@@ -52,17 +53,40 @@
             <table class="table card-table table-vcenter">
               <thead>
                 <tr>
-                  <th>SKU</th><th>Tên sản phẩm</th><th>Ngành</th>
+                  <th>Ảnh</th><th>SKU</th><th>Tên sản phẩm</th><th>Ngành</th>
                   <th class="text-end">Giá</th><th class="text-center">Tồn</th>
                   <th>Trạng thái</th><th></th>
                 </tr>
               </thead>
               <tbody id="product-rows">
-                <tr><td colspan="7" class="text-muted text-center py-4">Đang tải...</td></tr>
+                <tr><td colspan="8" class="text-muted text-center py-4">Đang tải...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL ẢNH SẢN PHẨM ── -->
+<div class="modal modal-blur fade" id="modal-images" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">📷 Ảnh — <span id="image-product-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="image-product-id"/>
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col">
+            <label class="form-label">JPEG, PNG hoặc WebP — tối đa 8 MB</label>
+            <input id="product-image-file" type="file" class="form-control" accept="image/jpeg,image/png,image/webp" capture="environment"/>
+          </div>
+          <div class="col-auto"><button id="upload-image-btn" class="btn btn-primary" onclick="uploadProductImage()">Tải ảnh lên</button></div>
+        </div>
+        <div id="product-image-grid" class="row g-3"><div class="text-muted">Đang tải...</div></div>
       </div>
     </div>
   </div>
@@ -344,6 +368,9 @@ initSidebar();
 
 const fmtVND = n => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0));
 const fmtCur = n => fmtVND(n) + " đ";
+const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+})[char]);
 
 // ── PRICE INPUT FORMAT ───────────────────────────────────────
 window.onPriceInput = function(input) {
@@ -370,12 +397,13 @@ window.loadProducts = async function() {
   const type   = document.getElementById("filter-type").value;
   const status = document.getElementById("filter-status").value;
   const tbody  = document.getElementById("product-rows");
-  tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center">Đang tải...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center">Đang tải...</td></tr>';
   try {
     const { products } = await api.get("/api/products?" + new URLSearchParams({ search, type, status }));
     const typeLabel = t => ({gold:"Vàng 🥇",silver:"Bạc 🥈",fashion:"Thời trang",phone:"Điện thoại"})[t] || "Chung";
     tbody.innerHTML = products.length ? products.map(p => `
       <tr>
+        <td>${p.primary_image_url ? `<img src="${p.primary_image_url}" alt="" class="rounded" style="width:44px;height:44px;object-fit:cover"/>` : '<div class="rounded bg-secondary-lt d-flex align-items-center justify-content-center" style="width:44px;height:44px">📦</div>'}</td>
         <td class="text-muted">${p.sku}</td>
         <td>${p.name}${p.brand_name ? '<br/><small class="text-muted">'+p.brand_name+'</small>' : ""}</td>
         <td><span class="badge bg-blue-lt">${typeLabel(p.product_type)}</span></td>
@@ -385,10 +413,11 @@ window.loadProducts = async function() {
         <td class="text-end">
           <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openEditModal("${p.id}")'>Sửa</button>
           <button class="btn btn-sm btn-ghost-secondary me-1" onclick='openVariantsModal("${p.id}","${p.name}")'>Phiên bản</button>
+          <button class="btn btn-sm btn-ghost-info me-1" onclick='openImagesModal("${p.id}","${p.name}")'>📷 Ảnh</button>
           <button class="btn btn-sm btn-ghost-warning me-1" onclick='openLabelModal("${p.id}","${p.name}")'>🏷️ Tem</button>
           <button class="btn btn-sm btn-ghost-danger" onclick='toggleStatus("${p.id}","${p.status}")'>${p.status === "active" ? "Ẩn" : "Hiện"}</button>
         </td>
-      </tr>`).join("") : '<tr><td colspan="7" class="text-muted text-center py-4">Chưa có sản phẩm nào</td></tr>';
+      </tr>`).join("") : '<tr><td colspan="8" class="text-muted text-center py-4">Chưa có sản phẩm nào</td></tr>';
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-danger text-center">' + err.message + "</td></tr>";
   }
@@ -664,6 +693,62 @@ window.toggleStatus = async function(id, cur) {
   if (!confirm((ns === "inactive" ? "Ẩn" : "Hiện") + " sản phẩm này?")) return;
   try { await api.put("/api/products/" + id, { status: ns }); loadProducts(); }
   catch (err) { alert(err.message); }
+};
+
+// ── PRODUCT IMAGES ──────────────────────────────────────────
+window.openImagesModal = function(productId, productName) {
+  document.getElementById("image-product-id").value = productId;
+  document.getElementById("image-product-name").textContent = productName;
+  document.getElementById("product-image-file").value = "";
+  new bootstrap.Modal(document.getElementById("modal-images")).show();
+  loadProductImages();
+};
+
+async function loadProductImages() {
+  const productId = document.getElementById("image-product-id").value;
+  const grid = document.getElementById("product-image-grid");
+  grid.innerHTML = '<div class="text-muted">Đang tải...</div>';
+  try {
+    const { images } = await api.get(`/api/products/${productId}/images`);
+    grid.innerHTML = images.length ? images.map(image => `
+      <div class="col-6 col-md-4">
+        <div class="card h-100">
+          <img src="${image.image_url}" alt="${escapeHtml(image.alt_text || "Ảnh sản phẩm")}" class="card-img-top" style="height:180px;object-fit:cover"/>
+          <div class="card-body p-2 d-flex align-items-center justify-content-between">
+            <span class="badge ${image.is_primary ? "bg-green-lt" : "bg-secondary-lt"}">${image.is_primary ? "Ảnh đại diện" : "Ảnh phụ"}</span>
+            <button class="btn btn-sm btn-ghost-danger" onclick='deleteProductImage("${image.id}")'>Xóa</button>
+          </div>
+        </div>
+      </div>`).join("") : '<div class="text-muted text-center py-4">Sản phẩm chưa có ảnh</div>';
+  } catch (err) { grid.innerHTML = `<div class="text-danger">${err.message}</div>`; }
+}
+
+window.uploadProductImage = async function() {
+  const productId = document.getElementById("image-product-id").value;
+  const input = document.getElementById("product-image-file");
+  if (!input.files?.length) return alert("Chọn một ảnh trước khi tải lên");
+  const btn = document.getElementById("upload-image-btn");
+  const form = new FormData();
+  form.append("image", input.files[0]);
+  form.append("is_primary", "true");
+  btn.disabled = true; btn.textContent = "Đang tải...";
+  try {
+    await api.upload(`/api/products/${productId}/images`, form);
+    input.value = "";
+    await loadProductImages();
+    loadProducts();
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; btn.textContent = "Tải ảnh lên"; }
+};
+
+window.deleteProductImage = async function(imageId) {
+  if (!confirm("Xóa ảnh này?")) return;
+  const productId = document.getElementById("image-product-id").value;
+  try {
+    await api.delete(`/api/products/${productId}/images/${imageId}`);
+    await loadProductImages();
+    loadProducts();
+  } catch (err) { alert(err.message); }
 };
 
 // ── VARIANTS MODAL ───────────────────────────────────────────

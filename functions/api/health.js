@@ -22,21 +22,14 @@ export async function onRequest({ request, env }) {
       WHERE table_schema = 'public'
     `;
 
-    return json({
-      status: "ok",
-      db: "neon/postgresql",
-      server_time: rows[0].server_time,
-      db_name: rows[0].db_name,
-      tables_found: parseInt(tableCount[0].count),
-      // Nếu tables_found = 0 → schema chưa chạy
-      // Nếu tables_found = 20 → schema đầy đủ
-      schema_ready: parseInt(tableCount[0].count) >= 20,
-    });
+    const payload = { status: "ok", schema_ready: parseInt(tableCount[0].count) >= 20 };
+    if (env.HEALTH_DETAILS === "true") payload.diagnostics = {
+      server_time: rows[0].server_time, tables_found: parseInt(tableCount[0].count),
+    };
+    return json(payload);
   } catch (err) {
     // Trả lỗi rõ ràng để debug dễ hơn
-    return errorJson(
-      `Kết nối DB thất bại: ${err.message}`,
-      500
-    );
+    console.error("Health check database failure", err);
+    return errorJson("Dịch vụ cơ sở dữ liệu chưa sẵn sàng", 503, "DATABASE_UNAVAILABLE");
   }
 }

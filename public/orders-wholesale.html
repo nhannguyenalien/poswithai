@@ -329,7 +329,7 @@
                         <option value="installment">📅 Trả góp / Nợ</option>
                       </select>
                       <input id="pay-amount" type="text" inputmode="decimal" class="form-control" placeholder="Để trống nếu khách chưa trả gì" step="1000" oninput="onPayAmountInput(this.value)"/>
-                      <div class="text-muted small mt-1">Bỏ trống hoặc để 0 = khách CHƯA trả gì hôm nay, toàn bộ ghi thành nợ.</div>
+                      <div class="text-muted small mt-1">Bỏ trống hoặc để 0 = khách chưa trả hôm nay. Có thể nhập lớn hơn tiền toa để thu kèm nợ cũ; phần dư sẽ thành cửa hàng nợ khách.</div>
                     </div>
                     <!-- Đây là số nợ tiền CUỐI CÙNG (đã gồm nợ cũ, đã trừ số vừa thu ở trên)
                          — chỉ hiện 1 chỗ duy nhất, ngay cạnh ô thu tiền để tiện đối chiếu. -->
@@ -1189,7 +1189,7 @@ async function loadCustomerDebt(custId, custName) {
   box.innerHTML = `<span class="text-muted">Đang tra cứu công nợ...</span>`;
   try {
     const data = await api.get(`/api/customers/${custId}/debt`);
-    lastDebtData = { ...data, custName };
+    lastDebtData = { ...data, custName, customerId: custId };
     const hasMoneyDebt = data.money_debt !== 0;
     const hasGoldDebt  = Math.abs(data.gold_debt_99) > 0.0005;
     // Luôn hiện nút mở modal công nợ, kể cả khi khách chưa có nợ gì — không thì khách mới
@@ -1499,12 +1499,20 @@ function buildWholesalePayload() {
 
   const isEditing = !!editOrderId;
 
-  // Nợ cũ: khi đang SỬA hoá đơn nháp, giữ nguyên snapshot đã chốt lúc tạo đơn ban đầu
-  // (editingOldDebt) thay vì lấy lastDebtData hiện tại — vì lastDebtData lúc này có thể
-  // đã bao gồm luôn chính đơn đang sửa (do API công nợ cộng dồn mọi đơn pending), nếu
-  // lấy lại sẽ bị tính trùng nợ của chính đơn này vào "nợ cũ" của nó.
-  const oldMoneyDebt   = isEditing ? editingOldDebt.money_debt      : (lastDebtData?.money_debt || 0);
-  const oldGoldDebt99  = isEditing ? editingOldDebt.gold_debt_99    : (parseFloat(lastDebtData?.gold_debt_99) || 0);
+  // Giữ snapshot lịch sử nếu vẫn là khách ban đầu. Nếu đổi sang khách khác, phải dùng
+  // công nợ hiện tại vừa tải của khách mới. Không cho lưu trong lúc kết quả công nợ của
+  // khách mới chưa về để phần xem trước không lệch với snapshot backend sẽ chốt.
+  const customerChanged = isEditing && custId !== editingOriginalCustomerId;
+  if (customerChanged && lastDebtData?.customerId !== custId) {
+    alert("Đang tải công nợ của khách mới, vui lòng chờ một chút rồi lưu lại.");
+    return null;
+  }
+  const oldMoneyDebt = isEditing && !customerChanged
+    ? editingOldDebt.money_debt
+    : (lastDebtData?.money_debt || 0);
+  const oldGoldDebt99 = isEditing && !customerChanged
+    ? editingOldDebt.gold_debt_99
+    : (parseFloat(lastDebtData?.gold_debt_99) || 0);
 
   const payload = {
     customer_id: custId,
@@ -1607,21 +1615,23 @@ async function doSubmitOrder(payload, meta) {
   else btn.textContent = isEditing ? "⏳ Đang cập nhật..." : "⏳ Đang tạo...";
 
   try {
+    // Toa mới và khoản thanh toán phải được backend lưu trong cùng một transaction.
+    // Không gửi payment riêng sau khi tạo toa vì nếu request thứ hai lỗi, toa sẽ thành nợ.
+    if (!isEditing && !draft && rawPayAmt > 0) {
+      const expectedTotal = payload.items.reduce((sum, item) =>
+        sum + item.unit_price * item.quantity - (item.discount || 0), 0)
+        + Math.round(payload.gold_to_money_99 * payload.gold_price_99)
+        - payload.discount;
+      payload.initial_payment = {
+        method: document.getElementById("pay-method").value,
+        amount: expectedTotal < 0 ? -rawPayAmt : rawPayAmt,
+      };
+    } else {
+      delete payload.initial_payment;
+    }
     const orderRes = isEditing
       ? await api.put(`/api/orders/${editOrderId}`, payload)
       : await api.post("/api/orders", payload);
-
-    // Thanh toán/hoàn tiền ngay nếu có — chỉ áp dụng lúc TẠO MỚI. Lúc sửa hoá đơn nháp
-    // không đụng tới payments (đã có luồng "Thu thêm tiền" riêng ở trang Danh sách đơn),
-    // tránh vô tình tạo thêm 1 khoản thu ngoài ý muốn khi chỉ đang chỉnh sửa nội dung.
-    if (!isEditing && rawPayAmt > 0) {
-      const isRefund = orderRes.total < 0;
-      await api.post("/api/payments", {
-        order_id:   orderRes.order_id || orderRes.id,
-        method:     document.getElementById("pay-method").value,
-        amount:     isRefund ? -rawPayAmt : rawPayAmt,
-      }).catch(() => {}); // Non-blocking
-    }
 
     const orderId = orderRes.order_id || orderRes.id || editOrderId;
 
@@ -1673,6 +1683,7 @@ async function doSubmitOrder(payload, meta) {
 // ── SỬA HOÁ ĐƠN NHÁP (?edit=<id>) ────────────────────────
 let editOrderId = null;
 let editingOldDebt = null;
+let editingOriginalCustomerId = null;
 
 async function loadOrderForEdit(orderId) {
   let res;
@@ -1684,6 +1695,7 @@ async function loadOrderForEdit(orderId) {
   if (order.status !== "pending") { alert("Hoá đơn đã đóng, không thể sửa."); return; }
 
   editOrderId = orderId;
+  editingOriginalCustomerId = order.customer_id || null;
   editingOldDebt = { money_debt: parseInt(order.old_money_debt) || 0, gold_debt_99: parseFloat(order.old_gold_debt_99) || 0 };
 
   document.getElementById("page-title").textContent = "✏️ Sửa Hoá Đơn Nháp";
@@ -1698,25 +1710,22 @@ async function loadOrderForEdit(orderId) {
   document.getElementById("quick-mode-toggle").checked = true;
   onQuickModeToggle(true);
 
-  // Khách hàng — không gọi loadCustomerDebt() ở đây để khỏi ghi đè editingOldDebt phía
-  // trên bằng công nợ hiện tại (lúc này công nợ hiện tại đã bao gồm luôn chính đơn này).
-  // Khoá luôn không cho đổi khách khi đang sửa: đổi khách giữa chừng sẽ khiến snapshot
-  // "nợ cũ" (chốt 1 lần lúc mở form, thuộc về khách CŨ) bị gắn nhầm sang khách MỚI trên
-  // hoá đơn in — muốn đổi khách cho đúng, huỷ đơn nháp này và tạo lại đơn mới.
+  // Không gọi loadCustomerDebt() cho khách ban đầu: công nợ hiện tại đã gồm chính đơn
+  // đang sửa, lấy lại sẽ tính trùng. Nếu nhân viên chọn khách khác, selectCustomer() sẽ
+  // tải công nợ hiện tại của khách mới và snapshot mới sẽ được backend kiểm tra lại.
   if (order.customer_id) {
     document.getElementById("cust-id").value = order.customer_id;
     custSearch.value = `${order.customer_name || ""}${order.customer_phone ? " — " + order.customer_phone : ""}`;
     document.getElementById("cust-info").textContent = `✓ Khách: ${order.customer_name || ""}`;
-    lastDebtData = { money_debt: editingOldDebt.money_debt, gold_debt_99: editingOldDebt.gold_debt_99, custName: order.customer_name, orders: [], adjustments: [] };
+    lastDebtData = { money_debt: editingOldDebt.money_debt, gold_debt_99: editingOldDebt.gold_debt_99, custName: order.customer_name, customerId: order.customer_id, orders: [], adjustments: [] };
     const hasMoneyDebt = editingOldDebt.money_debt !== 0;
     const hasGoldDebt  = Math.abs(editingOldDebt.gold_debt_99) > 0.0005;
     document.getElementById("cust-debt").innerHTML = (hasMoneyDebt || hasGoldDebt)
       ? `<span class="text-muted">Nợ cũ tại thời điểm lập đơn này: ${hasMoneyDebt ? fmtVND(editingOldDebt.money_debt) : ""} ${hasGoldDebt ? editingOldDebt.gold_debt_99.toFixed(3) + " chỉ" : ""}</span>`
       : "";
   }
-  custSearch.disabled = true;
-  document.getElementById("new-cust-btn").disabled = true;
-  document.getElementById("cust-info").innerHTML += ` <span class="text-muted">(không đổi được khách khi đang sửa đơn)</span>`;
+  custSearch.disabled = false;
+  document.getElementById("new-cust-btn").disabled = false;
 
   document.getElementById("notes").value = order.notes || "";
   document.getElementById("gold-price-99").value = order.gold_price_99 > 0 ? order.gold_price_99 : "";

@@ -1,11 +1,13 @@
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
   if (preflight) return preflight;
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
+  const allowed = await requirePermission(context, auth, context.request.method === "GET" ? "products.read" : "products.write");
+  if (allowed instanceof Response) return allowed;
 
   const { id } = context.params;
   const method  = context.request.method;
@@ -22,7 +24,10 @@ async function getProduct({ env }, { tenantId }, id) {
   const products = await sql`
     SELECT p.*, c.name AS category_name,
            b.name AS brand_name, b.symbol AS brand_symbol,
-           b.standard AS brand_standard, b.address AS brand_address
+           b.standard AS brand_standard, b.address AS brand_address,
+           (SELECT pi.image_url FROM product_images pi
+            WHERE pi.tenant_id = p.tenant_id AND pi.product_id = p.id
+            ORDER BY pi.is_primary DESC, pi.sort_order, pi.created_at LIMIT 1) AS primary_image_url
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN brands b     ON b.id = p.brand_id

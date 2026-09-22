@@ -1,6 +1,7 @@
 // GET /api/reports/stock?filter=all|low|zero
 import { getDb, json, errorJson, handleOptions } from "../../_db.js";
-import { requireAuth } from "../../_auth.js";
+import { requireAuth, requirePermission } from "../../_auth.js";
+import { validateEnum, validationError } from "../../_validation.js";
 
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
@@ -8,9 +9,13 @@ export async function onRequest(context) {
   const auth = await requireAuth(context);
   if (auth instanceof Response) return auth;
   if (context.request.method !== "GET") return errorJson("Method not allowed", 405);
+  const allowed = await requirePermission(context, auth, "inventory.read");
+  if (allowed instanceof Response) return allowed;
 
   const url      = new URL(context.request.url);
   const filter   = url.searchParams.get("filter") || "all"; // all|low|zero
+  const filterError = validateEnum(filter, ["all", "low", "zero"], "filter");
+  if (filterError) return validationError([filterError]);
   const { tenantId } = auth;
   const sql = getDb(context.env);
 

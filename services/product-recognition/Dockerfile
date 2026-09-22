@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
-# Bake the public pretrained weights into the image so production starts predictably.
-RUN python -c "from torchvision.models import MobileNet_V3_Small_Weights; MobileNet_V3_Small_Weights.DEFAULT.get_state_dict(progress=True)"
+# Bake model and processor into the image so production never downloads weights.
+ARG MODEL_ID=google/siglip-base-patch16-224
+ENV MODEL_ID=${MODEL_ID}
+RUN python -c "from transformers import AutoModel, AutoProcessor; AutoProcessor.from_pretrained('${MODEL_ID}'); AutoModel.from_pretrained('${MODEL_ID}')"
 
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /data \

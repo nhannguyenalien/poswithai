@@ -26,6 +26,7 @@
     .btn-google:hover { box-shadow: 0 2px 8px rgba(0,0,0,.15); background: #f8f8f8; color: #3c4043; }
     .google-icon { width: 22px; height: 22px; }
   </style>
+  <script src="/js/i18n.js"></script>
 </head>
 <body class="d-flex flex-column">
 <div class="page page-center">
@@ -52,9 +53,22 @@
           Đăng nhập bằng Google
         </a>
 
-        <div class="text-center text-muted" style="font-size:.85rem">
-          Chỉ dùng email Google để xác thực.<br/>
-          Không lưu mật khẩu.
+        <div class="hr-text my-3">hoặc</div>
+
+        <form id="login-form">
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input id="email" type="email" class="form-control" autocomplete="email" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Mật khẩu</label>
+            <input id="password" type="password" class="form-control" autocomplete="current-password" required/>
+          </div>
+          <button id="btn-login" type="submit" class="btn btn-primary w-100">Đăng nhập</button>
+        </form>
+
+        <div class="text-center text-muted mt-3" style="font-size:.85rem">
+          Đăng nhập Google lần đầu để tạo mật khẩu cho tài khoản hiện tại.
         </div>
 
       </div>
@@ -88,6 +102,34 @@
     el.classList.remove("d-none");
     clearSession();
   }
+
+  document.getElementById("login-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = document.getElementById("btn-login");
+    const errorEl = document.getElementById("error-msg");
+    button.disabled = true;
+    button.textContent = "Đang đăng nhập...";
+    errorEl.classList.add("d-none");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: document.getElementById("email").value.trim(),
+          password: document.getElementById("password").value,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Không đăng nhập được");
+      setSession(data.token, data.user);
+      window.location.href = "/dashboard.html";
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.classList.remove("d-none");
+      button.disabled = false;
+      button.textContent = "Đăng nhập";
+    }
+  });
 </script>
 </body>
 </html>

@@ -20,6 +20,7 @@ const COMBINED_CTE = `
       customer_paid_money  AS collected
     FROM gold_invoices
     WHERE tenant_id = $1
+      AND ($4 OR status <> 'draft')
 
     UNION ALL
 
@@ -39,7 +40,54 @@ const COMBINED_CTE = `
     LEFT JOIN (
       SELECT order_id, SUM(amount) AS paid FROM payments WHERE status = 'completed' GROUP BY order_id
     ) pay ON pay.order_id = o.id
-    WHERE o.tenant_id = $1 AND (o.gold_sold_99 > 0 OR o.gold_bought_99 > 0)
+    WHERE o.tenant_id = $1
+      AND ($4 OR NOT COALESCE(o.is_quick, false))
+      AND (o.gold_sold_99 > 0 OR o.gold_bought_99 > 0)
+  )
+`;
+
+// Công nợ phải dùng cùng một nguồn và quy ước dấu với /api/customers/:id/debt:
+// tổng đơn chưa huỷ/hoàn (total - paid) + bút toán điều chỉnh. Chỉ lọc khách còn
+// nợ SAU khi đã cộng dồn, để các giao dịch ngược chiều triệt tiêu đúng cho nhau.
+const CUSTOMER_DEBT_CTE = `
+  WITH payment_totals AS (
+    SELECT p.order_id, SUM(p.amount) AS paid
+    FROM payments p
+    WHERE p.status = 'completed'
+    GROUP BY p.order_id
+  ), customer_balances AS (
+    SELECT
+      c.id AS customer_id,
+      c.name AS customer_name,
+      c.phone AS customer_phone,
+      COALESCE(o.money_debt, 0) + COALESCE(a.money_debt, 0) AS money_debt,
+      COALESCE(o.gold_debt, 0) + COALESCE(a.gold_debt, 0) AS gold_debt,
+      COALESCE(o.invoice_count, 0) AS invoice_count
+    FROM customers c
+    LEFT JOIN (
+      SELECT
+        ord.customer_id,
+        SUM(ord.total - COALESCE(pt.paid, 0)) AS money_debt,
+        SUM(COALESCE(ord.gold_debt_99, 0)) AS gold_debt,
+        COUNT(*) AS invoice_count
+      FROM orders ord
+      LEFT JOIN payment_totals pt ON pt.order_id = ord.id
+      WHERE ord.tenant_id = $1
+        AND ord.customer_id IS NOT NULL
+        AND ord.status NOT IN ('cancelled', 'refunded')
+        AND ($2 OR NOT COALESCE(ord.is_quick, false))
+      GROUP BY ord.customer_id
+    ) o ON o.customer_id = c.id
+    LEFT JOIN (
+      SELECT
+        customer_id,
+        SUM(money_amount) AS money_debt,
+        SUM(gold_amount_99) AS gold_debt
+      FROM customer_debt_adjustments
+      WHERE tenant_id = $1
+      GROUP BY customer_id
+    ) a ON a.customer_id = c.id
+    WHERE c.tenant_id = $1
   )
 `;
 
@@ -53,6 +101,7 @@ export async function onRequest(context) {
   const url  = new URL(context.request.url);
   const from = url.searchParams.get("from") || toDate(-29);
   const to   = url.searchParams.get("to")   || toDate(0);
+  const includeDrafts = url.searchParams.get("include_drafts") === "1";
   const { tenantId } = auth;
   const sql = getDb(context.env);
 
@@ -69,29 +118,32 @@ export async function onRequest(context) {
       COUNT(*) FILTER (WHERE status = 'cancelled')     AS cancelled,
       COALESCE(SUM(gold_delivered)  FILTER (WHERE status='completed'), 0) AS total_gold_delivered,
       COALESCE(SUM(gold_returned)   FILTER (WHERE status='completed'), 0) AS total_gold_returned,
-      COALESCE(SUM(gold_debt)       FILTER (WHERE status='completed'), 0) AS total_gold_debt,
       COALESCE(SUM(making_fee)      FILTER (WHERE status='completed'), 0) AS total_making_fee,
-      COALESCE(SUM(money_debt)      FILTER (WHERE status='completed'), 0) AS total_money_debt,
       COALESCE(SUM(collected)       FILTER (WHERE status='completed'), 0) AS total_collected
     FROM combined
     WHERE date >= $2 AND date <= $3
-  `, [tenantId, from, to]);
+  `, [tenantId, from, to, includeDrafts]);
 
   // ── 2. Danh sách khách còn nợ (tổng nợ luỹ kế, không giới hạn theo kỳ) ──
-  const goldDebtors = await sql(COMBINED_CTE + `
+  const goldDebtors = await sql(CUSTOMER_DEBT_CTE + `
     SELECT
       customer_name,
       customer_phone,
-      SUM(gold_debt)   AS gold_debt,
-      SUM(money_debt)  AS money_debt,
-      COUNT(*)         AS invoice_count
-    FROM combined
-    WHERE status = 'completed'
-      AND (gold_debt > 0.001 OR money_debt > 0)
-    GROUP BY customer_name, customer_phone
-    ORDER BY money_debt DESC
-    LIMIT 20
-  `, [tenantId]);
+      gold_debt,
+      money_debt,
+      invoice_count
+    FROM customer_balances
+    WHERE gold_debt > 0.001 OR money_debt > 0
+    ORDER BY money_debt DESC, gold_debt DESC, customer_name ASC
+  `, [tenantId, includeDrafts]);
+
+  // Tổng trên thẻ phải khớp đúng các dòng trong danh sách, không phụ thuộc kỳ báo cáo.
+  summary[0].total_money_debt = goldDebtors.reduce(
+    (sum, row) => sum + Math.max(Number(row.money_debt) || 0, 0), 0
+  );
+  summary[0].total_gold_debt = goldDebtors.reduce(
+    (sum, row) => sum + Math.max(Number(row.gold_debt) || 0, 0), 0
+  );
 
   // ── 3. Theo ngày ─────────────────────────────────────
   const daily = await sql(COMBINED_CTE + `
@@ -105,7 +157,7 @@ export async function onRequest(context) {
       AND date >= $2 AND date <= $3
     GROUP BY date
     ORDER BY date ASC
-  `, [tenantId, from, to]);
+  `, [tenantId, from, to, includeDrafts]);
 
   // ── 4. Giá vàng theo thời gian (SJC hoặc cái đầu tiên) ──
   const goldPrices = await sql`

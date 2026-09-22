@@ -267,16 +267,14 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 controller: _amount,
                 decoration: InputDecoration(
                   labelText: 'Số tiền (VND)',
-                  helperText: 'Còn lại: ${formatVnd(widget.remaining)}',
+                  helperText:
+                      'Còn lại của toa: ${formatVnd(widget.remaining)} · Có thể thu thêm để đối trừ nợ cũ',
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 validator: (value) {
                   final amount = int.tryParse(value ?? '') ?? 0;
                   if (amount <= 0) return 'Số tiền phải lớn hơn 0';
-                  if (amount > widget.remaining) {
-                    return 'Số tiền vượt quá còn lại';
-                  }
                   return null;
                 },
               ),

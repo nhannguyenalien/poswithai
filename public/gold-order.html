@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Phiếu Gia Công</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
   <style>
     /* ── TOOLBAR ── */
     .invoice-toolbar {
@@ -76,8 +77,14 @@
     .due-warn    { color: #b45309; }
     .due-danger  { color: #dc2626; }
 
+    /* Khách hàng — ô tìm kiếm autocomplete */
+    .cust-search-wrap { position: relative; }
+    .cust-search-wrap .autocomplete-list { top: 100%; left: 0; margin-top: 2px; }
+
     /* Print */
     @media print {
+      .navbar-vertical { display: none !important; }
+      .page-wrapper { margin-left: 0 !important; }
       .invoice-toolbar { display: none !important; }
       .invoice-wrap { background: #fff; padding: 0; }
       .a4 { box-shadow: none; max-width: 100%; margin: 0; }
@@ -92,6 +99,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body style="margin:0; background:#e5e7eb;">
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg no-print" data-bs-theme="dark"></aside>
+  <div class="page-wrapper">
 
 <!-- Toolbar -->
 <div class="invoice-toolbar no-print">
@@ -122,11 +132,16 @@
   <!-- Thông tin khách -->
   <div class="cust-grid">
     <label>Khách hàng:</label>
-    <input id="khach-hang" class="inv-input" type="text" placeholder="Họ tên..."/>
-    <label>SĐT:</label>
-    <input id="dien-thoai" class="inv-input" type="text"/>
-    <label>Địa chỉ:</label>
-    <input id="dia-chi" class="inv-input" type="text"/>
+    <div class="d-flex gap-1">
+      <div class="cust-search-wrap flex-fill">
+        <input id="khach-hang" class="inv-input" type="text" placeholder="Gõ tên/SĐT để tìm khách có sẵn, hoặc nhập mới..." autocomplete="off"/>
+        <div id="cust-ac" class="autocomplete-list d-none no-print"></div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-primary no-print" style="white-space:nowrap" onclick="openQuickCustomer()">+ Mới</button>
+    </div>
+    <input type="hidden" id="cust-id"/>
+    <input type="hidden" id="dien-thoai"/>
+    <input type="hidden" id="dia-chi"/>
     <label>Ngày đặt:</label>
     <input id="ngay-dat" class="inv-input" type="text" style="width:120px"/>
     <label>Hẹn giao:</label>
@@ -192,11 +207,38 @@
 </div><!-- /a4 -->
 </div><!-- /invoice-wrap -->
 
+  </div><!-- /page-wrapper -->
+</div><!-- /page -->
+
+<!-- Modal thêm khách mới nhanh -->
+<div class="modal modal-blur fade" id="modal-quick-customer" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Thêm khách mới</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label required">Họ tên</label><input id="qc-name" type="text" class="form-control"/></div>
+        <div class="mb-3"><label class="form-label">Số điện thoại</label><input id="qc-phone" type="text" class="form-control"/></div>
+        <div class="mb-3"><label class="form-label">Địa chỉ</label><input id="qc-address" type="text" class="form-control"/></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-bs-dismiss="modal">Huỷ</button>
+        <button class="btn btn-primary" onclick="saveQuickCustomer()">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script type="module">
 import { requireLogin, getToken } from "/js/auth.js";
+import { initSidebar } from "/js/sidebar.js";
+import { api } from "/js/api.js";
 import { printGoldOrderReceipt } from "/js/print.js";
 requireLogin();
+initSidebar();
 
 // ── HELPERS ─────────────────────────────────────────────
 const fmt   = n => Number(n).toLocaleString("vi-VN");
@@ -226,6 +268,63 @@ function updateDueBadge() {
   badge.className = "due-badge " + cls;
 }
 window.updateDueBadge = updateDueBadge;
+
+// ── KHÁCH HÀNG AUTOCOMPLETE ──────────────────────────────
+// Tìm khách có sẵn trong CRM theo tên/SĐT để điền nhanh, tránh phải gõ lại thông tin
+// cho khách quen — cùng cơ chế đang dùng ở trang lập hoá đơn bán sỉ (orders-wholesale.html).
+const custSearch = $("khach-hang");
+const custAC     = $("cust-ac");
+
+custSearch.addEventListener("input", async function() {
+  $("cust-id").value = ""; // gõ lại coi như huỷ liên kết khách đã chọn, khớp SĐT lúc lưu vẫn tự gắn đúng khách
+  const term = this.value.trim();
+  if (term.length < 2) { custAC.classList.add("d-none"); return; }
+  try {
+    const { customers } = await api.get(`/api/customers?search=${encodeURIComponent(term)}&limit=20`);
+    // Kết quả có thể về trễ sau khi người dùng đã rời ô tìm (VD bấm "+ Mới" mở popup) —
+    // bỏ qua để khỏi đè dropdown lên trên popup đang mở.
+    if (document.activeElement !== custSearch) return;
+    custAC.innerHTML = customers.map(c =>
+      `<div class="ac-item" onclick='selectCustomer("${c.id}", ${JSON.stringify(c.name || "")}, ${JSON.stringify(c.phone || "")}, ${JSON.stringify(c.address || "")})'>${c.name || "(Không tên)"} <span class="text-muted">${c.phone || ""}</span></div>`
+    ).join("") || `<div class="ac-item text-muted">Không tìm thấy</div>`;
+    custAC.classList.remove("d-none");
+  } catch {}
+});
+document.addEventListener("click", e => { if (!custSearch.contains(e.target)) custAC.classList.add("d-none"); });
+
+window.selectCustomer = function(id, name, phone, address) {
+  $("cust-id").value  = id;
+  $("khach-hang").value = name;
+  if (phone)   $("dien-thoai").value = phone;
+  if (address) $("dia-chi").value    = address;
+  custAC.classList.add("d-none");
+};
+
+// ── THÊM KHÁCH MỚI NHANH (popup) ─────────────────────────
+// Khi gõ tìm mà không thấy khách nào phù hợp, cho tạo mới ngay tại đây thay vì phải
+// rời trang qua /customers.html rồi quay lại — mượn lại thông tin đang gõ dở ở ô tìm.
+window.openQuickCustomer = function() {
+  $("qc-name").value    = custSearch.value.trim();
+  $("qc-phone").value   = $("dien-thoai").value.trim();
+  $("qc-address").value = $("dia-chi").value.trim();
+  custAC.classList.add("d-none");
+  bootstrap.Modal.getOrCreateInstance($("modal-quick-customer")).show();
+};
+
+window.saveQuickCustomer = async function() {
+  const name    = $("qc-name").value.trim();
+  const phone   = $("qc-phone").value.trim();
+  const address = $("qc-address").value.trim();
+  if (!name) return alert("Tên là bắt buộc");
+  try {
+    const c = await api.post("/api/customers", { name, phone, address });
+    selectCustomer(c.id, c.name, c.phone, c.address);
+    bootstrap.Modal.getInstance($("modal-quick-customer")).hide();
+    $("qc-name").value = ""; $("qc-phone").value = ""; $("qc-address").value = "";
+  } catch (err) {
+    alert("Lỗi tạo khách: " + err.message);
+  }
+};
 
 // ── INIT ────────────────────────────────────────────────
 const params  = new URLSearchParams(location.search);
@@ -298,8 +397,8 @@ window.saveOrder = async function() {
 
   const sdt = $("dien-thoai").value.trim();
   if (!sdt) {
-    alert("⚠️ Vui lòng nhập số điện thoại khách hàng!");
-    $("dien-thoai").focus();
+    alert("⚠️ Vui lòng chọn khách hàng có sẵn hoặc bấm \"+ Mới\" để thêm khách (cần có SĐT)!");
+    custSearch.focus();
     return;
   }
 
@@ -338,6 +437,7 @@ window.saveOrder = async function() {
     : new Date().toISOString().slice(0, 10);
 
   const payload = {
+    customer_id:      $("cust-id").value || null,
     customer_name:    $("khach-hang").value.trim() || null,
     customer_phone:   sdt,
     customer_address: $("dia-chi").value.trim() || null,
@@ -440,6 +540,7 @@ async function loadOrder(id) {
     const { order, items } = await res.json();
 
     $("order-number-display").textContent = "Số phiếu: " + order.order_number;
+    $("cust-id").value     = order.customer_id      || "";
     $("khach-hang").value  = order.customer_name    || "";
     $("dien-thoai").value  = order.customer_phone   || "";
     $("dia-chi").value     = order.customer_address || "";
