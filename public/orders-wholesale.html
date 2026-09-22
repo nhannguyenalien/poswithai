@@ -567,6 +567,7 @@ import { requireLogin } from "/js/auth.js";
   import { initSidebar } from "/js/sidebar.js";
 import { api } from "/js/api.js";
 import { printInvoiceA4, openPendingPrintWindow } from "/js/print.js";
+import { roundGold99, normalizeGoldConversion99 } from "/js/wholesale-math.js";
 
 requireLogin();
   initSidebar();
@@ -1445,24 +1446,32 @@ function buildWholesalePayload() {
   if (!cart.length && !customItems.length && !tradeIns.length) { alert("Giỏ hàng và hàng cũ khách trả đều đang trống"); return null; }
   if (customItems.some(it => !it.name.trim())) { alert("⚠️ Mỗi dòng mục tuỳ ý cần có tên hàng"); return null; }
 
-  const goldPrice99 = parseFloat(document.getElementById("gold-price-99")?.value) || 0;
-  const goldSold99 = cart
+  // PostgreSQL lưu vàng với tối đa 6 số lẻ. Các phép nhân/chia JS (ví dụ 68/99)
+  // thường sinh ra số dài kiểu 0.686868686..., khiến API từ chối cả toa dù giao diện
+  // chỉ đang hiển thị 3 số lẻ. Chuẩn hoá ngay trước khi đóng gói payload để số gửi đi,
+  // số xem trước và số backend tính nợ luôn thống nhất.
+  const goldPrice99 = roundGold99(parseFloat(document.getElementById("gold-price-99")?.value) || 0);
+  const goldSold99 = roundGold99(cart
     .filter(i => i.isMetal && i.metalType === "gold")
     .reduce((s, i) => s + i.weight * i.qty * (i.purity / 99), 0)
     + customItems
     .filter(it => it.purity > 0 && it.weight > 0)
-    .reduce((s, it) => s + it.weight * it.qty * (it.purity / 99), 0);
-  const goldBought99 = tradeIns.reduce((s, t) => s + (t.weight || 0) * ((t.purity || 0) / 99), 0);
-  const goldToMoney99 = parseFloat(document.getElementById("gold-to-money-99")?.value) || 0;
+    .reduce((s, it) => s + it.weight * it.qty * (it.purity / 99), 0));
+  const goldBought99 = roundGold99(tradeIns.reduce((s, t) => s + (t.weight || 0) * ((t.purity || 0) / 99), 0));
+  const goldToMoney99 = normalizeGoldConversion99(
+    goldSold99,
+    goldBought99,
+    parseFloat(document.getElementById("gold-to-money-99")?.value) || 0,
+  );
   // Giá vàng 99 chỉ dùng để quy phần "Quy ra tiền" ra đồng — nếu để nguyên hết thành nợ
   // vàng (Quy ra tiền = 0) thì không cần giá cũng tạo đơn được, khỏi phải nhập cho có.
   if (Math.abs(goldToMoney99) > 0.0005 && goldPrice99 <= 0) { alert("⚠️ Cần nhập giá vàng 99/chỉ để quy phần vàng ra tiền"); return null; }
-  const makingFeeTotal = cart
+  const makingFeeTotal = Math.round(cart
     .filter(i => i.isMetal && i.metalType === "gold")
     .reduce((s, i) => s + i.fee * i.qty, 0)
     + customItems
     .filter(it => it.purity > 0 && it.weight > 0)
-    .reduce((s, it) => s + it.price * it.qty, 0);
+    .reduce((s, it) => s + it.price * it.qty, 0));
   const goldMoneyValue = Math.round(goldToMoney99 * goldPrice99);
 
   const ckPct     = parseFloat(document.getElementById("discount-pct").value) || 0;
@@ -1477,7 +1486,7 @@ function buildWholesalePayload() {
     product_variant_id: i.variantId || null,
     item_name:  i.variantId ? undefined : i.name,
     quantity:   i.qty,
-    unit_price: i.unitPrice,
+    unit_price: Math.round(i.unitPrice),
     discount:   0,
     metal_details: i.isMetal && i.metalType === "gold" ? {
       metalType: "gold", purity: i.purity, basePurity: i.basePurity,
@@ -1488,7 +1497,7 @@ function buildWholesalePayload() {
     product_variant_id: null,
     item_name:  it.name,
     quantity:   it.qty,
-    unit_price: it.price,
+    unit_price: Math.round(it.price),
     discount:   0,
     metal_details: it.purity > 0 && it.weight > 0 ? {
       metalType: "gold", purity: it.purity, basePurity: 99,
@@ -1510,9 +1519,9 @@ function buildWholesalePayload() {
   const oldMoneyDebt = isEditing && !customerChanged
     ? editingOldDebt.money_debt
     : (lastDebtData?.money_debt || 0);
-  const oldGoldDebt99 = isEditing && !customerChanged
+  const oldGoldDebt99 = roundGold99(isEditing && !customerChanged
     ? editingOldDebt.gold_debt_99
-    : (parseFloat(lastDebtData?.gold_debt_99) || 0);
+    : (parseFloat(lastDebtData?.gold_debt_99) || 0));
 
   const payload = {
     customer_id: custId,

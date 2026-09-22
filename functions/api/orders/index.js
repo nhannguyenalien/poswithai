@@ -11,6 +11,15 @@ import {
   parseIdempotency,
 } from "../../_idempotency.js";
 
+export function isOrderSettled(total, initialPaymentAmount, goldDebt99, goldEpsilon = 0.000001) {
+  const hasOutstandingGold = Math.abs(goldDebt99) > goldEpsilon;
+  const moneySettled = total === 0 || (initialPaymentAmount !== 0 && (
+    (total >= 0 && total - initialPaymentAmount <= 0)
+    || (total < 0 && total - initialPaymentAmount >= 0)
+  ));
+  return moneySettled && !hasOutstandingGold;
+}
+
 export async function onRequest(context) {
   const preflight = handleOptions(context.request);
   if (preflight) return preflight;
@@ -190,13 +199,13 @@ async function createOrder({ request, env }, { tenantId, userId }) {
   // gold_price_99>0, vì giá vàng có thể để trống nếu nhân viên để nguyên hết thành nợ
   // vàng (không quy đồng nào ra tiền) — nếu không, nợ vàng sẽ bị bỏ sót hoàn toàn.
   let total, goldDebt99 = 0, goldMoneyValue = 0;
+  const goldEpsilon = 0.000001;
   if (gold_sold_99 > 0 || gold_bought_99 > 0) {
     const goldRemaining99 = gold_sold_99 - gold_bought_99;
     const goldConversion = Number(gold_to_money_99);
-    const epsilon = 0.000001;
     const conversionOutOfRange = goldRemaining99 >= 0
-      ? goldConversion < -epsilon || goldConversion - goldRemaining99 > epsilon
-      : goldConversion > epsilon || goldRemaining99 - goldConversion > epsilon;
+      ? goldConversion < -goldEpsilon || goldConversion - goldRemaining99 > goldEpsilon
+      : goldConversion > goldEpsilon || goldRemaining99 - goldConversion > goldEpsilon;
     if (conversionOutOfRange) {
       return errorJson("Số vàng quy ra tiền phải cùng chiều và không vượt phần vàng còn lại", 422, "INVALID_GOLD_CONVERSION");
     }
@@ -228,10 +237,9 @@ async function createOrder({ request, env }, { tenantId, userId }) {
     }
   }
 
-  const isPaid = initialPaymentAmount !== 0 && (
-    (total >= 0 && total - initialPaymentAmount <= 0)
-    || (total < 0 && total - initialPaymentAmount >= 0)
-  );
+  // Toa 0đ và không còn nợ vàng là đã tất toán dù không cần tạo payment 0đ.
+  // Ngược lại, còn nợ vàng thì vẫn phải để pending dù tiền đã thu đủ.
+  const isPaid = isOrderSettled(total, initialPaymentAmount, goldDebt99, goldEpsilon);
 
   const orderId = crypto.randomUUID();
   const now = new Date().toISOString();

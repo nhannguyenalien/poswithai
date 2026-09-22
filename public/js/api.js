@@ -17,7 +17,10 @@ async function request(method, path, body, extraHeaders = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error(data.error || `Lỗi ${res.status}`);
+    const detail = Array.isArray(data.details)
+      ? data.details.map(item => item?.message).filter(Boolean).join("; ")
+      : "";
+    throw new Error([data.error || `Lỗi ${res.status}`, detail].filter(Boolean).join(": "));
   }
 
   return data;
