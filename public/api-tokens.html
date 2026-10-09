@@ -70,7 +70,7 @@
               <pre class="mb-0 mt-2"><code>curl -H "Authorization: Bearer pos_xxxx" https://your-domain.pages.dev/api/products</code></pre>
             </div>
 
-            <div id="endpoint-docs"></div>
+            <p class="mb-0">Danh sách endpoint, cách kết nối MCP cho AI agent: <a href="/api-docs.html">📖 Tài liệu API &amp; MCP</a>.</p>
           </div>
         </div>
 
@@ -194,61 +194,6 @@ window.revokeToken = async function(id) {
     loadTokens();
   } catch (err) { alert(err.message); }
 };
-
-// ── Tài liệu API — liệt kê nhóm endpoint sẵn có để tích hợp ──
-const ENDPOINT_GROUPS = [
-  { name: "Sản phẩm", items: [
-    ["GET",  "/api/products", "Danh sách sản phẩm (?search=&status=)"],
-    ["POST", "/api/products", "Tạo sản phẩm mới"],
-  ]},
-  { name: "Kho hàng", items: [
-    ["GET",  "/api/inventory", "Tồn kho hiện tại theo sản phẩm"],
-    ["POST", "/api/inventory/adjust", "Điều chỉnh tồn kho (nhập/xuất/kiểm kê)"],
-  ]},
-  { name: "Khách hàng", items: [
-    ["GET",  "/api/customers", "Danh sách khách hàng (?search=)"],
-    ["POST", "/api/customers", "Tạo khách hàng mới"],
-    ["GET",  "/api/customers/:id/debt", "Công nợ (tiền + vàng quy 99) của 1 khách"],
-    ["POST", "/api/customers/:id/debt", "Thêm bút toán điều chỉnh nợ thủ công"],
-  ]},
-  { name: "Đơn hàng", items: [
-    ["GET",  "/api/orders", "Danh sách đơn hàng (?include_quick=1&search=)"],
-    ["POST", "/api/orders", "Tạo đơn hàng mới (bán lẻ hoặc bán sỉ)"],
-    ["GET",  "/api/orders/:id", "Chi tiết 1 đơn hàng"],
-    ["PUT",  "/api/orders/:id", "Đổi trạng thái đơn, hoặc sửa hoá đơn nháp"],
-  ]},
-  { name: "Thanh toán", items: [
-    ["POST", "/api/payments", "Ghi nhận thu tiền / hoàn tiền cho 1 đơn"],
-  ]},
-  { name: "Danh mục", items: [
-    ["GET",  "/api/categories", "Danh sách danh mục sản phẩm"],
-    ["POST", "/api/categories", "Tạo danh mục mới"],
-  ]},
-  { name: "Giá vàng", items: [
-    ["GET",  "/api/gold-prices", "Lịch sử giá vàng đã lưu"],
-    ["POST", "/api/gold-prices", "Ghi nhận giá vàng mới"],
-  ]},
-  { name: "Báo cáo", items: [
-    ["GET",  "/api/reports/gold", "Báo cáo vàng (?from=&to=)"],
-  ]},
-  { name: "Mẫu hàng (bán sỉ)", items: [
-    ["GET",  "/api/item-presets", "Danh sách mẫu hàng đã lưu (?kind=custom|tradein)"],
-    ["POST", "/api/item-presets", "Lưu/cập nhật 1 mẫu hàng"],
-  ]},
-];
-
-document.getElementById("endpoint-docs").innerHTML = ENDPOINT_GROUPS.map(g => `
-  <details class="endpoint-group border-top pt-2 mt-2">
-    <summary>${g.name}</summary>
-    <div class="ps-2 pb-2">
-      ${g.items.map(([method, path, desc]) => `
-        <div class="endpoint-row d-flex gap-2 py-1">
-          <span class="method-badge badge ${method === "GET" ? "bg-blue-lt" : method === "POST" ? "bg-green-lt" : "bg-orange-lt"}">${method}</span>
-          <span class="text-nowrap">${path}</span>
-          <span class="text-muted font-monospace-off">— ${desc}</span>
-        </div>`).join("")}
-    </div>
-  </details>`).join("");
 
 loadTokens();
 </script>

@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: POS API
+  version: 1.0.0-beta.1
+  description: Mobile contract. Money is integer VND; gold weight/purity is a decimal string.
+servers:
+  - url: https://staging.example.invalid/api
+security: [{ bearerAuth: [] }]
+paths:
+  /health:
+    get: { security: [], operationId: health, responses: { '200': { $ref: '#/components/responses/Ok' }, '503': { $ref: '#/components/responses/Error' } } }
+  /auth/login:
+    post: { security: [], operationId: webLogin, responses: { '200': { $ref: '#/components/responses/Ok' }, '401': { $ref: '#/components/responses/Error' } } }
+  /auth/mobile-login:
+    post: { security: [], operationId: mobileLogin, requestBody: { $ref: '#/components/requestBodies/Login' }, responses: { '200': { $ref: '#/components/responses/MobileSession' }, '401': { $ref: '#/components/responses/Error' } } }
+  /auth/refresh:
+    post: { security: [], operationId: refreshSession, responses: { '200': { $ref: '#/components/responses/MobileSession' }, '401': { $ref: '#/components/responses/Error' } } }
+  /auth/revoke:
+    post: { security: [], operationId: revokeSession, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /auth/me: { get: { operationId: currentUser, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /products: { get: { operationId: listProducts, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createProduct, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /products/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: getProduct, responses: { '200': { $ref: '#/components/responses/Ok' } } }, put: { operationId: updateProduct, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /products/{id}/images:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      operationId: listProductImages
+      responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/Error' } }
+    post:
+      operationId: uploadProductImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary, description: JPEG, PNG or WebP; maximum 8 MB. }
+                alt_text: { type: string, maxLength: 200 }
+                is_primary: { type: boolean, default: false }
+      responses: { '201': { $ref: '#/components/responses/Ok' }, '413': { $ref: '#/components/responses/Error' }, '415': { $ref: '#/components/responses/Error' } }
+  /products/{id}/images/{imageId}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: imageId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete: { operationId: deleteProductImage, responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/Error' } } }
+  /customers: { get: { operationId: listCustomers, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createCustomer, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /customers/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: getCustomer, responses: { '200': { $ref: '#/components/responses/Ok' } } }, put: { operationId: updateCustomer, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /customers/{id}/debt: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: customerDebt, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /orders: { get: { operationId: listOrders, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createOrder, parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /orders/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: getOrder, responses: { '200': { $ref: '#/components/responses/Ok' } } }, put: { deprecated: true, operationId: legacyUpdateOrder, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /orders/{id}/status: { parameters: [{ $ref: '#/components/parameters/Id' }], patch: { operationId: updateOrderStatus, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /orders/{id}/draft: { parameters: [{ $ref: '#/components/parameters/Id' }], put: { operationId: updateDraftOrder, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /payments: { get: { operationId: listPayments, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createPayment, parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /categories: { get: { operationId: listCategories, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createCategory, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /categories/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], put: { operationId: updateCategory, responses: { '200': { $ref: '#/components/responses/Ok' } } }, delete: { operationId: deleteCategory, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /brands: { get: { operationId: listBrands, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createBrand, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /variants: { get: { operationId: listVariants, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createVariant, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /inventory: { get: { operationId: listInventoryTransactions, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' }, { name: type, in: query, schema: { type: string, enum: [IN, OUT, ADJUST] } }, { name: search, in: query, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createInventoryTransaction, parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '201': { $ref: '#/components/responses/Ok' }, '409': { $ref: '#/components/responses/Error' } } } }
+  /inventory/stock: { get: { operationId: stock, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /suppliers: { get: { operationId: listSuppliers, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }, { name: search, in: query, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createSupplier, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /suppliers/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: getSupplier, responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/Error' } } }, put: { operationId: updateSupplier, responses: { '200': { $ref: '#/components/responses/Ok' }, '422': { $ref: '#/components/responses/Error' } } }, delete: { operationId: archiveSupplier, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /purchase-receipts: { get: { operationId: listPurchaseReceipts, parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Offset' }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createPurchaseReceipt, parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '201': { $ref: '#/components/responses/Ok' }, '409': { $ref: '#/components/responses/Error' } } } }
+  /purchase-receipts/{id}: { parameters: [{ $ref: '#/components/parameters/Id' }], get: { operationId: getPurchaseReceipt, responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/Error' } } } }
+  /gold/prices: { get: { operationId: goldPrices, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: setGoldPrice, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /gold/types: { get: { operationId: goldTypes, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createGoldType, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /reports/revenue: { get: { operationId: revenueReport, parameters: [{ $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' }], responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /reports/gold: { get: { operationId: goldReport, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /reports/stock: { get: { operationId: stockReport, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /settings: { get: { operationId: settings, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /api-tokens: { get: { operationId: listApiTokens, responses: { '200': { $ref: '#/components/responses/Ok' } } }, post: { operationId: createApiToken, responses: { '201': { $ref: '#/components/responses/Ok' } } } }
+  /backup/export: { get: { operationId: exportBackup, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+  /backup/import: { post: { operationId: importBackup, responses: { '200': { $ref: '#/components/responses/Ok' } } } }
+components:
+  securitySchemes: { bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT } }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    Offset: { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+    From: { name: from, in: query, schema: { type: string, format: date } }
+    To: { name: to, in: query, schema: { type: string, format: date } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+  requestBodies:
+    Login: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string, format: email }, password: { type: string, minLength: 8 } } } } } }
+  schemas:
+    Error: { type: object, required: [code, message, details], properties: { code: { type: string }, message: { type: string }, details: { type: [object, array, 'null'] }, error: { type: string, deprecated: true } } }
+    MoneyVnd: { type: integer, format: int64, description: Integer VND; never floating point. }
+    DecimalString: { type: string, pattern: '^-?\\d+(?:\\.\\d{1,6})?$', description: Gold weight/purity decimal string. }
+    Pagination: { type: object, required: [limit, offset, returned, total, has_more], properties: { limit: { type: integer }, offset: { type: integer }, returned: { type: integer }, total: { type: integer }, has_more: { type: boolean } } }
+    MobileSession: { type: object, required: [access_token, refresh_token, token_type, expires_in], properties: { access_token: { type: string }, refresh_token: { type: string }, token_type: { const: Bearer }, expires_in: { const: 900 } } }
+  responses:
+    Ok: { description: Success, content: { application/json: { schema: { type: object } } } }
+    Error: { description: Error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    MobileSession: { description: Mobile token pair, content: { application/json: { schema: { $ref: '#/components/schemas/MobileSession' } } } }

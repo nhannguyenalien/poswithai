@@ -1,0 +1,8 @@
+# POS API
+
+> API + MCP server của hệ thống POS (bán lẻ / vàng). Xác thực: `Authorization: Bearer pos_<token>` (tạo ở /api-tokens.html).
+
+- [Tài liệu API](/api-docs.html): danh sách endpoint đọc dữ liệu, cách kết nối MCP
+- [Catalog JSON](/api/docs): mô tả máy đọc được cho từng tool
+- [OpenAPI](/openapi.yaml): toàn bộ REST API (gồm cả thao tác ghi)
+- MCP endpoint: `/mcp` (Streamable HTTP, chỉ đọc)

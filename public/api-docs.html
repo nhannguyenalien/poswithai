@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Tài liệu API &amp; MCP — POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    pre { white-space: pre-wrap; word-break: break-all; }
+    .tool-row { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  </style>
+  <script src="/js/i18n.js"></script>
+</head>
+<body>
+<div class="page">
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark"></aside>
+  <div class="page-wrapper">
+    <div class="page-header"><div class="container-xl">
+      <h2 class="page-title">📖 Tài liệu API &amp; MCP cho AI agent</h2>
+      <div class="text-muted small">Kết nối Claude / Cursor / agent khác tới dữ liệu POS (chỉ đọc), hoặc gọi REST trực tiếp.</div>
+    </div></div>
+    <div class="page-body"><div class="container-xl">
+
+      <div class="card mb-3"><div class="card-body">
+        <h3>1. Lấy token</h3>
+        <p>Vào <a href="/api-tokens.html">trang API</a> → <b>Tạo token mới</b>. Token dạng <code>pos_…</code>, chỉ hiện 1 lần. Quyền của token = quyền của người tạo; dữ liệu giới hạn trong cửa hàng của bạn.</p>
+        <h3>2. Kết nối MCP</h3>
+        <p>MCP URL (Streamable HTTP): <code id="mcp-url"></code></p>
+        <p class="mb-1">Claude Code:</p>
+        <pre class="bg-dark text-light p-3 rounded"><code id="cc-cmd"></code></pre>
+        <p class="mb-1">Cấu hình JSON (Cursor, Claude Desktop qua <code>mcp-remote</code>, …):</p>
+        <pre class="bg-dark text-light p-3 rounded"><code id="json-cfg"></code></pre>
+        <h3>3. Hoặc gọi REST</h3>
+        <pre class="bg-dark text-light p-3 rounded"><code id="curl-cmd"></code></pre>
+        <p class="text-muted small mb-0">Toàn bộ REST (gồm ghi dữ liệu): <a href="/openapi.yaml">openapi.yaml</a>. Máy đọc: <a href="/api/docs">/api/docs</a>, <a href="/llms.txt">/llms.txt</a>. Tiền là số nguyên VND; cân/tuổi vàng là chuỗi thập phân. Thao tác ghi cần header <code>Idempotency-Key</code> và chưa mở qua MCP.</p>
+      </div></div>
+
+      <div class="card"><div class="card-header"><h3 class="card-title">Tool MCP / endpoint đọc dữ liệu</h3></div>
+        <div class="card-body" id="tools">Đang tải…</div></div>
+
+    </div></div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
+<script type="module">
+import { requireLogin } from "/js/auth.js";
+import { initSidebar } from "/js/sidebar.js";
+requireLogin();
+initSidebar();
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const origin = location.origin;
+document.getElementById("mcp-url").textContent = origin + "/mcp";
+document.getElementById("cc-cmd").textContent =
+  `claude mcp add --transport http pos ${origin}/mcp --header "Authorization: Bearer pos_xxxx"`;
+document.getElementById("json-cfg").textContent = JSON.stringify(
+  { mcpServers: { pos: { url: origin + "/mcp", headers: { Authorization: "Bearer pos_xxxx" } } } }, null, 2);
+document.getElementById("curl-cmd").textContent =
+  `curl -H "Authorization: Bearer pos_xxxx" "${origin}/api/products?search=nhan&limit=10"`;
+
+try {
+  const res = await fetch("/api/docs");
+  const { tools } = await res.json();
+  const groups = {};
+  for (const t of tools) (groups[t.group] ||= []).push(t);
+  document.getElementById("tools").innerHTML = Object.entries(groups).map(([name, items]) => `
+    <details class="border-top pt-2 mt-2" open><summary class="fw-bold">${esc(name)}</summary>
+      <div class="ps-2 pb-2">${items.map(t => {
+        const props = Object.entries(t.input_schema.properties).map(([k, v]) =>
+          `<code>${esc(k)}${t.input_schema.required.includes(k) ? "*" : ""}</code> <span class="text-muted">${esc(v.description)}</span>`).join(" · ");
+        return `<div class="tool-row py-1"><span class="badge bg-blue-lt">GET</span> ${esc(t.path)}
+          <span class="text-muted">— <b>${esc(t.name)}</b>: ${esc(t.description)}</span>
+          ${props ? `<div class="small ps-4">${props}</div>` : ""}</div>`;
+      }).join("")}</div></details>`).join("");
+} catch (e) {
+  document.getElementById("tools").textContent = "Không tải được danh sách: " + e.message;
+}
+</script>
+</body>
+</html>

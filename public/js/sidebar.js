@@ -21,6 +21,7 @@ const NAV = [
   { href: "/gold-orders.html",      icon: "📝", label: "Gia Công" },
   { href: "/gold-invoices.html",    icon: "📋", label: "HĐ Vàng" },
   { href: "/api-tokens.html",       icon: "🔑", label: "API" },
+  { href: "/api-docs.html",         icon: "📖", label: "Docs API / MCP" },
   { href: "/backup.html",           icon: "💾", label: "Sao lưu" },
   "divider",
   { href: "/settings.html",         icon: "⚙️", label: "Cài đặt" },
