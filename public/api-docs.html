@@ -14,9 +14,9 @@
 </head>
 <body>
 <div class="page">
-  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark"></aside>
-  <div class="page-wrapper">
+  <div class="page-wrapper" style="margin-left:0">
     <div class="page-header"><div class="container-xl">
+      <a href="/" class="small">← Trang chủ</a> · <a href="/api-tokens.html" class="small">Tạo token</a>
       <h2 class="page-title">📖 Tài liệu API &amp; MCP cho AI agent</h2>
       <div class="text-muted small">Kết nối Claude / Cursor / agent khác tới dữ liệu POS (chỉ đọc), hoặc gọi REST trực tiếp.</div>
     </div></div>
@@ -24,7 +24,7 @@
 
       <div class="card mb-3"><div class="card-body">
         <h3>1. Lấy token</h3>
-        <p>Vào <a href="/api-tokens.html">trang API</a> → <b>Tạo token mới</b>. Token dạng <code>pos_…</code>, chỉ hiện 1 lần. Quyền của token = quyền của người tạo; dữ liệu giới hạn trong cửa hàng của bạn.</p>
+        <p>Đăng nhập, vào <a href="/api-tokens.html">trang API</a> → <b>Tạo token mới</b>. Token dạng <code>pos_…</code>, chỉ hiện 1 lần. Quyền của token = quyền của người tạo; dữ liệu giới hạn trong cửa hàng của bạn.</p>
         <h3>2. Kết nối MCP</h3>
         <p>MCP URL (Streamable HTTP): <code id="mcp-url"></code></p>
         <p class="mb-1">Claude Code:</p>
@@ -44,10 +44,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script type="module">
-import { requireLogin } from "/js/auth.js";
-import { initSidebar } from "/js/sidebar.js";
-requireLogin();
-initSidebar();
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const origin = location.origin;
